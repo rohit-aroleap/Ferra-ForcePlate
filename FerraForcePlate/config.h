@@ -93,6 +93,7 @@
 #define BLE_SERVICE_UUID     "7e400001-b5a3-f393-e0a9-e50e24dcca9e"
 #define BLE_DATA_CHAR_UUID   "7e400002-b5a3-f393-e0a9-e50e24dcca9e"  // notify (32-byte frame)
 #define BLE_CMD_CHAR_UUID    "7e400003-b5a3-f393-e0a9-e50e24dcca9e"  // write  (text commands)
+#define BLE_INFO_CHAR_UUID   "7e400004-b5a3-f393-e0a9-e50e24dcca9e"  // notify (text lines: [INFO]/[CAL]/[STATUS])
 
 // Connection-interval request (units of 1.25 ms). THE fix for ~0.5 s dot lag
 // on the IMU board: hosts default slow (Windows ~47 ms, Android ~22 ms) and

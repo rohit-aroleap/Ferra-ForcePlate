@@ -164,6 +164,10 @@ button:disabled, select:disabled { opacity: .3; cursor: not-allowed; }
 .hidden-tiles { display: none; }
 
 /* ── Advanced drawer (engineering view) ──────────────────────────────── */
+.cal-input { width: 76px; font-family: var(--mono); text-align: center;
+             background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--r);
+             color: var(--text); padding: 5px 6px; font-size: 13px; }
+.cal-cells { display: flex; gap: 14px; margin: 0 0 8px; font-family: var(--mono); font-size: 12px; color: var(--text3); }
 .metrics { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; margin-bottom: 10px; }
 @media (max-width: 600px) { .metrics { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 .metric { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r2); padding: 12px 14px; }
@@ -263,7 +267,7 @@ button:disabled, select:disabled { opacity: .3; cursor: not-allowed; }
 </div><!-- /main-col -->
 
 <details class="adv" id="adv-details">
-  <summary>Advanced — board controls, diagnostics, live values, time chart, session metrics &amp; log</summary>
+  <summary>Advanced — board controls, calibration, diagnostics, live values, time chart, session metrics &amp; log</summary>
 
   <div class="card">
     <div class="card-title">Board controls</div>
@@ -273,6 +277,21 @@ button:disabled, select:disabled { opacity: .3; cursor: not-allowed; }
       <button id="btn-zero"       class="btn-amber" disabled>Zero</button>
       <span style="font-size:12px;color:var(--text3);">Ending a game auto-saves the session CSV.</span>
     </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Calibration — 2-point, per cell</div>
+    <div class="cal-cells" id="cal-cells">
+      <span id="cs-0">FL –</span><span id="cs-1">FR –</span><span id="cs-2">BL –</span><span id="cs-3">BR –</span>
+    </div>
+    <div class="controls" style="margin-bottom:8px;">
+      <label style="font-size:12px;color:var(--text2);">W1 <input id="cal-w1" class="cal-input" type="number" min="1" value="5000"> g</label>
+      <label style="font-size:12px;color:var(--text2);">W2 <input id="cal-w2" class="cal-input" type="number" min="1" value="10000"> g</label>
+      <button id="btn-cal-start" class="btn-green" disabled>Start</button>
+      <button id="btn-cal-next"  class="btn-amber" disabled>Next ▸</button>
+      <button id="btn-cal-abort" class="btn-red"   disabled>Abort</button>
+    </div>
+    <div id="cal-instr" style="font-size:13px;color:var(--text2);min-height:18px;">Connect the plate, keep two known weights handy, then press Start — the plate's own prompts appear here.</div>
   </div>
 
   <div class="card">
@@ -363,6 +382,7 @@ button:disabled, select:disabled { opacity: .3; cursor: not-allowed; }
 const SVC_UUID    = "7e400001-b5a3-f393-e0a9-e50e24dcca9e";
 const ANGLES_UUID = "7e400002-b5a3-f393-e0a9-e50e24dcca9e";   // notify: 32-byte CoP frame
 const CMD_UUID    = "7e400003-b5a3-f393-e0a9-e50e24dcca9e";   // write: text commands (ZERO …)
+const INFO_UUID   = "7e400004-b5a3-f393-e0a9-e50e24dcca9e";   // notify: [INFO]/[CAL]/[STATUS] text lines
 
 // ── DOM helpers ────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -383,6 +403,7 @@ function log(msg, cls = '') {
 let device     = null;
 let anglesChar = null;
 let cmdChar    = null;
+let infoChar   = null;
 let connected  = false;
 
 function setConnected(yes) {
@@ -392,6 +413,7 @@ function setConnected(yes) {
   $('btn-connect').disabled    = yes;
   $('btn-disconnect').disabled = !yes;
   $('btn-zero').disabled       = !yes;
+  setCalButtons();
   updateHero();
   refreshStatus();
 }
@@ -410,6 +432,18 @@ async function attachGatt() {
   cmdChar      = await svc.getCharacteristic(CMD_UUID);
   await anglesChar.startNotifications();
   anglesChar.addEventListener('characteristicvaluechanged', onAngles);
+  // Info channel (firmware ≥ BLE-calibration). Old firmware lacks it — the
+  // calibration UI then stays disabled but everything else works.
+  infoChar = null;
+  try {
+    infoChar = await svc.getCharacteristic(INFO_UUID);
+    await infoChar.startNotifications();
+    infoChar.addEventListener('characteristicvaluechanged', onInfo);
+    infoBuf = '';
+    sendCmd('STATUS');   // now that we're subscribed, ask for cell/cal state
+  } catch {
+    log('No info channel — update the plate firmware for dashboard calibration.', 'warn');
+  }
   // Fresh link → fresh link-health statistics + recalibrated baseline.
   diag.arrivalGaps.length = 0; diag.deviceGaps.length = 0;
   diag.lastArrival = 0; diag.lastDeviceMs = 0;
@@ -469,6 +503,72 @@ async function sendCmd(text) {
     log('Command failed: ' + e.message, 'err');
   }
 }
+
+// ── Info channel + calibration UI ──────────────────────────────────────────
+// The firmware notifies its [INFO]/[CAL]/[STATUS] serial lines in 20-byte
+// chunks terminated by '\n'. Reassemble, log everything, and let [CAL] lines
+// drive the wizard card: the plate's own prompts are the UI text, so the
+// dashboard never duplicates the firmware's sequencing logic.
+let infoBuf    = '';
+let calRunning = false;
+
+function onInfo(evt) {
+  infoBuf += new TextDecoder().decode(evt.target.value);
+  let nl;
+  while ((nl = infoBuf.indexOf('\n')) >= 0) {
+    const line = infoBuf.slice(0, nl).trim();
+    infoBuf = infoBuf.slice(nl + 1);
+    if (line) handleInfoLine(line);
+  }
+  if (infoBuf.length > 1024) infoBuf = '';   // runaway guard (lost newline)
+}
+
+function handleInfoLine(line) {
+  log('◀ ' + line);
+  if (line.startsWith('[CAL'))         updateCalUi(line);
+  else if (line.startsWith('[STATUS]')) renderCellStatus(line);
+}
+
+function setCalButtons() {
+  $('btn-cal-start').disabled = !connected || !infoChar || calRunning;
+  $('btn-cal-next') .disabled = !connected || !calRunning;
+  $('btn-cal-abort').disabled = !connected || !calRunning;
+}
+
+function updateCalUi(line) {
+  const text = line.replace(/^\[CAL[^\]]*\]\s*/, '');
+  if (!text) return;
+  $('cal-instr').textContent = text;
+  if (/DONE|ABORTED|ERR/.test(line)) calRunning = false;
+  setCalButtons();
+}
+
+// [STATUS] {"cells":[{name, connected, calibrated, …}, …], …} → per-cell badges.
+function renderCellStatus(line) {
+  let st;
+  try { st = JSON.parse(line.replace('[STATUS]', '').trim()); } catch { return; }
+  if (!st.cells) return;
+  st.cells.forEach((c, i) => {
+    const el = $('cs-' + i);
+    if (!el) return;
+    el.textContent = c.name + ' ' + (!c.connected ? 'n/c' : c.calibrated ? '✓' : '✗');
+    el.style.color = !c.connected ? 'var(--text3)' : c.calibrated ? 'var(--green)' : 'var(--red)';
+  });
+}
+
+$('btn-cal-start').addEventListener('click', () => {
+  const w1 = parseFloat($('cal-w1').value);
+  const w2 = parseFloat($('cal-w2').value);
+  if (!(w1 > 0) || !(w2 > 0) || Math.abs(w1 - w2) < 1) {
+    $('cal-instr').textContent = 'Enter two different positive weights in grams.';
+    return;
+  }
+  calRunning = true;
+  setCalButtons();
+  sendCmd(`CAL ${w1} ${w2}`);
+});
+$('btn-cal-next') .addEventListener('click', () => sendCmd('NEXT'));
+$('btn-cal-abort').addEventListener('click', () => sendCmd('ABORT'));
 
 // ── Link health + refresh ──────────────────────────────────────────────────
 // The frame cadence differs by board/OS, so "degraded" is judged against a

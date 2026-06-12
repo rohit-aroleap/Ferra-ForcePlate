@@ -22,11 +22,15 @@ struct CalData {
 // Sample counter for the once-per-second [STATS] line (read in ble_stream.cpp).
 volatile uint32_t g_sample_count = 0;
 
-// Broadcast a human-readable line. BLE carries only binary frames + accepts
-// commands, so info/status/calibration text goes to Serial only — `pio device
-// monitor` (or any 115200 serial terminal) remains the full debugging view.
-static void broadcast(const char* line) { Serial.println(line); }
-static void broadcast(const String& line) { Serial.println(line.c_str()); }
+// Broadcast a human-readable line to Serial and (if a central is connected)
+// the BLE INFO characteristic — the dashboard uses these lines to drive the
+// calibration wizard and its log. A 115200 serial terminal stays a full
+// debugging view.
+static void broadcast(const char* line) {
+    Serial.println(line);
+    bleStream.sendInfo(line);
+}
+static void broadcast(const String& line) { broadcast(line.c_str()); }
 
 static void samplerTask(void* pv);
 
@@ -184,42 +188,6 @@ static void resetCalibration(int idx) {
     broadcast(String("[INFO] Calibration reset: ") + CELL_NAMES[idx]);
 }
 
-// ─── Serial helpers (calibration wizard is serial-only) ───────────────────────
-static void flushSerial() {
-    while (Serial.available()) Serial.read();
-}
-
-static String readLine(unsigned long timeoutMs = 60000) {
-    flushSerial();
-    String s = "";
-    unsigned long t0 = millis();
-    while (true) {
-        if (millis() - t0 > timeoutMs) return "";
-        if (Serial.available()) {
-            char c = Serial.read();
-            if (c == '\n' || c == '\r') {
-                if (s.length() > 0) return s;
-            } else {
-                s += c;
-            }
-        }
-    }
-}
-
-static void waitForAck(unsigned long timeoutMs = 60000) {
-    flushSerial();
-    unsigned long t0 = millis();
-    while (!Serial.available()) {
-        if (millis() - t0 > timeoutMs) return;
-        delay(20);
-    }
-    flushSerial();
-}
-
-static float readFloat(unsigned long timeoutMs = 60000) {
-    return readLine(timeoutMs).toFloat();
-}
-
 // ─── Sample average for one cell ─────────────────────────────────────────────
 static long sampleCell(int idx, int n = 20) {
     long sum = 0;
@@ -231,101 +199,143 @@ static long sampleCell(int idx, int n = 20) {
     return sum / n;
 }
 
-// ─── Full 2-point calibration sequence (all connected cells) ─────────────────
-//   1. Ask for weight1 and weight2 values upfront (grams)
-//   2. Zero (tare) ALL connected cells at once
-//   3. For each cell: place weight1 → measure, place weight2 → measure
-static void calibrateAllCells() {
-    calInProgress = true;
+// ─── 2-point calibration state machine ───────────────────────────────────────
+// Command-driven (works identically from the dashboard over BLE and from a
+// serial terminal), replacing the old blocking serial wizard:
+//   cal <w1_g> <w2_g>  → start; prompts to empty the plate
+//   next               → advance (measure zero / weight 1 / weight 2 per cell)
+//   abort              → cancel, restore previous calibration offsets
+// Each step's prompt is broadcast as a [CAL] line; the dashboard shows the
+// latest prompt and gates its Next button on it. State survives a BLE
+// reconnect — only `abort`, completion, or reboot leaves the wizard.
+enum CalState { CAL_IDLE, CAL_WAIT_ZERO, CAL_WAIT_W1, CAL_WAIT_W2 };
+static CalState calState = CAL_IDLE;
+static float    calW1 = 0.0f, calW2 = 0.0f;
+static int      calCell = -1;                 // cell being calibrated
+static long     calRawZero[NUM_CELLS];
+static float    calScale1[NUM_CELLS];
 
-    Serial.println(F("[CAL] ════════════════════════════════════════"));
-    Serial.println(F("[CAL] CALIBRATION SEQUENCE — 2-point, all cells"));
-    Serial.println(F("[CAL] You will need two known weights."));
-    Serial.println(F("[CAL] Enter WEIGHT 1 in grams (e.g. 500):"));
-    float weight1 = readFloat(120000);
-    if (weight1 <= 0) {
-        Serial.println(F("[CAL] ERR: invalid weight — aborting.")); calInProgress = false; return;
+static int nextConnectedCell(int after) {
+    for (int i = after + 1; i < NUM_CELLS; i++) {
+        if (cellConnected[i]) return i;
     }
-    Serial.print(F("[CAL] Weight 1 = ")); Serial.print(weight1, 1); Serial.println(F("g"));
+    return -1;
+}
 
-    Serial.println(F("[CAL] Enter WEIGHT 2 in grams (must differ from weight 1, e.g. 1000):"));
-    float weight2 = readFloat(120000);
-    if (weight2 <= 0 || fabsf(weight2 - weight1) < 1.0f) {
-        Serial.println(F("[CAL] ERR: invalid or identical weight — aborting.")); calInProgress = false; return;
+static void calPromptPlace(int step, float grams) {
+    broadcast(String("[CAL] STEP ") + step + " — Place " + String(grams, 1) +
+              "g on " + CELL_POSITIONS[calCell] + ", then send: next");
+}
+
+static void calBegin(float w1, float w2) {
+    if (calState != CAL_IDLE) {
+        broadcast("[CAL] ERR: calibration already running — send 'next' or 'abort'.");
+        return;
     }
-    Serial.print(F("[CAL] Weight 2 = ")); Serial.print(weight2, 1); Serial.println(F("g"));
-    Serial.println(F("[CAL] ────────────────────────────────────────"));
-
-    Serial.println(F("[CAL] STEP 1/3 — ZERO all cells"));
-    Serial.println(F("[CAL]   Remove ALL weights from the force plate."));
-    Serial.println(F("[CAL]   Send any key when ready."));
-    waitForAck(120000);
-
-    Serial.println(F("[CAL] Measuring zero load on all cells (20 samples each)..."));
-    long rawZero[NUM_CELLS] = {0};
-    for (int i = 0; i < NUM_CELLS; i++) {
-        if (!cellConnected[i]) continue;
-        sensors.setOffset(i, 0);
-        rawZero[i] = sampleCell(i);
-        sensors.setOffset(i, rawZero[i]);
-        Serial.print(F("[CAL]   ")); Serial.print(CELL_NAMES[i]);
-        Serial.print(F(" zero_raw=")); Serial.println(rawZero[i]);
+    if (connectedCount == 0) {
+        broadcast("[CAL] ERR: no connected cells to calibrate.");
+        return;
     }
-    Serial.println(F("[CAL] All cells zeroed."));
-    Serial.println(F("[CAL] ────────────────────────────────────────"));
-
-    long rawW1[NUM_CELLS] = {0};
-    long rawW2[NUM_CELLS] = {0};
-
-    for (int i = 0; i < NUM_CELLS; i++) {
-        if (!cellConnected[i]) continue;
-        char tag[12]; sprintf(tag, "[CAL:%s]", CELL_NAMES[i]);
-
-        Serial.println(F("[CAL] ────────────────────────────────────────"));
-        Serial.print(tag); Serial.print(F(" STEP 2/3 — Place WEIGHT 1 ("));
-        Serial.print(weight1, 1); Serial.print(F("g) on "));
-        Serial.print(CELL_POSITIONS[i]); Serial.println(F("."));
-        Serial.print(tag); Serial.println(F(" Send any key when ready."));
-        waitForAck(120000);
-
-        Serial.print(tag); Serial.println(F(" Measuring weight 1 (20 samples)..."));
-        rawW1[i] = sampleCell(i);  // offset already set to rawZero, so this is tare-relative
-        float scale1 = (float)rawW1[i] / weight1;
-        Serial.print(tag); Serial.print(F(" raw=")); Serial.print(rawW1[i]);
-        Serial.print(F(" scale1=")); Serial.println(scale1, 4);
-
-        Serial.print(tag); Serial.print(F(" STEP 3/3 — Place WEIGHT 2 ("));
-        Serial.print(weight2, 1); Serial.print(F("g) on "));
-        Serial.print(CELL_POSITIONS[i]); Serial.println(F("."));
-        Serial.print(tag); Serial.println(F(" Send any key when ready."));
-        waitForAck(120000);
-
-        Serial.print(tag); Serial.println(F(" Measuring weight 2 (20 samples)..."));
-        rawW2[i] = sampleCell(i);
-        float scale2 = (float)rawW2[i] / weight2;
-        float diff = fabsf(scale1 - scale2) / ((scale1 + scale2) / 2.0f) * 100.0f;
-        Serial.print(tag); Serial.print(F(" raw=")); Serial.print(rawW2[i]);
-        Serial.print(F(" scale2=")); Serial.print(scale2, 4);
-        Serial.print(F(" diff=")); Serial.print(diff, 2); Serial.println(F("%"));
-        if (diff > 5.0f) {
-            Serial.print(tag); Serial.println(F(" WARN: scales differ >5% — check cell and weights"));
-        }
-
-        float finalScale = (scale1 + scale2) / 2.0f;
-
-        float verify = (float)rawW2[i] / finalScale;
-        Serial.print(tag); Serial.print(F(" VERIFY (weight2 still on plate): "));
-        Serial.print(verify, 2); Serial.print(F("g  (expected: "));
-        Serial.print(weight2, 1); Serial.println(F("g)"));
-
-        calData[i] = {true, finalScale, rawZero[i], true};
-        eepromWriteCalData(i);
-        Serial.print(tag); Serial.println(F(" DONE — saved to EEPROM."));
+    if (w1 <= 0.0f || w2 <= 0.0f || fabsf(w2 - w1) < 1.0f) {
+        broadcast("[CAL] ERR: weights must be positive and different. Usage: cal <w1_g> <w2_g>");
+        return;
     }
+    calW1 = w1; calW2 = w2;
+    calInProgress = true;          // pauses the sampler → streaming stops
+    calState = CAL_WAIT_ZERO;
+    broadcast(String("[CAL] 2-point calibration — W1=") + String(w1, 1) +
+              "g  W2=" + String(w2, 1) + "g");
+    broadcast("[CAL] STEP 1 — Remove ALL weight from the plate, then send: next");
+}
 
-    Serial.println(F("[CAL] ════════════════════════════════════════"));
-    Serial.println(F("[CAL] Calibration complete for all connected cells."));
+static void calAbort(const char* why) {
+    if (calState == CAL_IDLE) {
+        broadcast("[CAL] Nothing to abort.");
+        return;
+    }
+    calState = CAL_IDLE;
     calInProgress = false;
+    // Restore offsets from the stored calibration so a half-done run leaves
+    // the plate exactly as it was.
+    for (int i = 0; i < NUM_CELLS; i++) {
+        if (cellConnected[i]) applyCalibration(i);
+    }
+    broadcast(String("[CAL] ABORTED — ") + why);
+}
+
+static void calNext() {
+    switch (calState) {
+
+    case CAL_IDLE:
+        broadcast("[CAL] No calibration running. Start with: cal <w1_g> <w2_g>");
+        return;
+
+    case CAL_WAIT_ZERO: {
+        broadcast("[CAL] Measuring zero on all cells (~2 s)...");
+        for (int i = 0; i < NUM_CELLS; i++) {
+            if (!cellConnected[i]) continue;
+            sensors.setOffset(i, 0);
+            calRawZero[i] = sampleCell(i);
+            sensors.setOffset(i, calRawZero[i]);
+            broadcast(String("[CAL]   ") + CELL_NAMES[i] + " zero_raw=" + calRawZero[i]);
+        }
+        calCell  = nextConnectedCell(-1);
+        calState = CAL_WAIT_W1;
+        calPromptPlace(2, calW1);
+        return;
+    }
+
+    case CAL_WAIT_W1: {
+        char tag[12]; sprintf(tag, "[CAL:%s]", CELL_NAMES[calCell]);
+        broadcast(String(tag) + " measuring weight 1...");
+        long raw = sampleCell(calCell);   // offset = zero, so tare-relative
+        calScale1[calCell] = (float)raw / calW1;
+        broadcast(String(tag) + " raw=" + raw + " scale1=" + String(calScale1[calCell], 4));
+        calState = CAL_WAIT_W2;
+        calPromptPlace(3, calW2);
+        return;
+    }
+
+    case CAL_WAIT_W2: {
+        char tag[12]; sprintf(tag, "[CAL:%s]", CELL_NAMES[calCell]);
+        broadcast(String(tag) + " measuring weight 2...");
+        long  raw    = sampleCell(calCell);
+        float scale1 = calScale1[calCell];
+        float scale2 = (float)raw / calW2;
+        float diff   = fabsf(scale1 - scale2) / ((scale1 + scale2) / 2.0f) * 100.0f;
+        broadcast(String(tag) + " raw=" + raw + " scale2=" + String(scale2, 4) +
+                  " diff=" + String(diff, 2) + "%");
+        if (diff > 5.0f) {
+            broadcast(String(tag) + " WARN: scales differ >5% — check cell and weights");
+        }
+        float finalScale = (scale1 + scale2) / 2.0f;
+        float verify     = (float)raw / finalScale;
+        broadcast(String(tag) + " verify: " + String(verify, 2) + "g (expected " +
+                  String(calW2, 1) + "g)");
+
+        calData[calCell] = {true, finalScale, calRawZero[calCell], true};
+        eepromWriteCalData(calCell);
+        broadcast(String(tag) + " saved to EEPROM.");
+
+        calCell = nextConnectedCell(calCell);
+        if (calCell >= 0) {
+            calState = CAL_WAIT_W1;
+            calPromptPlace(2, calW1);
+        } else {
+            calState      = CAL_IDLE;
+            calInProgress = false;
+            broadcast("[CAL] DONE — all connected cells calibrated.");
+            if (allConnectedCalibrated()) {
+                postingMode = true;
+                EEPROM.write(POSTING_ADDR, 1);
+                EEPROM.commit();
+                broadcast("[INFO] Streaming enabled.");
+            }
+            printStatus();
+        }
+        return;
+    }
+    }
 }
 
 // ─── One-shot read helpers (serial debugging) ────────────────────────────────
@@ -377,7 +387,9 @@ static void handleCommand(String cmd) {
         broadcast("[INFO]   stop     - Stop streaming");
         broadcast("[INFO]   t/zero   - Tare all connected cells");
         broadcast("[INFO]   t1-t4    - Tare single cell (1=FL 2=FR 3=BL 4=BR)");
-        broadcast("[INFO]   c        - Full 2-point calibration sequence (serial)");
+        broadcast("[INFO]   cal a b  - Start 2-point calibration with weights a, b (grams)");
+        broadcast("[INFO]   next     - Advance calibration to the next step");
+        broadcast("[INFO]   abort    - Abort calibration, keep previous values");
         broadcast("[INFO]   x        - Reset calibration for all cells");
         broadcast("[INFO]   x1-x4    - Reset calibration for single cell");
         broadcast("[INFO] ════════════════════════════════════════");
@@ -414,19 +426,22 @@ static void handleCommand(String cmd) {
         for (int i = 0; i < NUM_CELLS; i++) tareCell(i);
         printStatus();
 
-    } else if (cmd == "c") {
-        if (connectedCount == 0) {
-            broadcast("[INFO] No connected cells to calibrate.");
+    } else if (cmd.startsWith("cal")) {
+        float w1 = 0.0f, w2 = 0.0f;
+        if (sscanf(cmd.c_str(), "cal %f %f", &w1, &w2) == 2) {
+            calBegin(w1, w2);
         } else {
-            calibrateAllCells();
-            if (allConnectedCalibrated()) {
-                postingMode = true;
-                EEPROM.write(POSTING_ADDR, 1);
-                EEPROM.commit();
-                broadcast("[INFO] All cells calibrated — streaming enabled.");
-            }
-            printStatus();
+            broadcast("[CAL] Usage: cal <weight1_g> <weight2_g>   e.g. cal 5000 10000");
         }
+
+    } else if (cmd == "next") {
+        calNext();
+
+    } else if (cmd == "abort") {
+        calAbort("by user");
+
+    } else if (cmd == "c") {
+        broadcast("[CAL] The wizard is now command-driven: cal <w1_g> <w2_g>, then 'next' through the steps.");
 
     } else if (cmd == "x") {
         for (int i = 0; i < NUM_CELLS; i++) resetCalibration(i);
@@ -470,7 +485,7 @@ void setup() {
         Serial.println(F("[INFO] Calibrated — will stream CoP on BLE connect."));
     } else {
         postingMode = false;
-        Serial.println(F("[INFO] Uncalibrated cells detected. Use 'c' to calibrate (over serial)."));
+        Serial.println(F("[INFO] Uncalibrated cells detected. Calibrate from the dashboard (Advanced > Calibration) or send: cal <w1_g> <w2_g>"));
     }
 
     bleStream.begin();

@@ -27,6 +27,7 @@ static_assert(sizeof(PlateFrame) == 32, "frame must be 32 bytes");
 static BLEServer*         s_server   = nullptr;
 static BLECharacteristic* s_dataChar = nullptr;
 static BLECharacteristic* s_cmdChar  = nullptr;
+static BLECharacteristic* s_infoChar = nullptr;
 
 static volatile bool s_connected     = false;
 static volatile bool s_justConnected = false;   // raised in onConnect, cleared by poll()
@@ -116,6 +117,11 @@ bool BleStream::begin() {
         BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
     s_cmdChar->setCallbacks(new CmdCallbacks());
 
+    s_infoChar = svc->createCharacteristic(
+        BLE_INFO_CHAR_UUID,
+        BLECharacteristic::PROPERTY_NOTIFY);
+    s_infoChar->addDescriptor(new BLE2902());
+
     svc->start();
 
     BLEAdvertising* adv = BLEDevice::getAdvertising();
@@ -146,6 +152,24 @@ void BleStream::sendFrame(uint32_t ms, float copX, float copY, float weight,
     }
     s_lastTxMs = ms;
     s_txFrames++;
+}
+
+void BleStream::sendInfo(const char* line) {
+    if (!s_connected || !s_infoChar) return;
+    // 20-byte chunks always fit a notify regardless of negotiated MTU; the
+    // bare '\n' notify marks end-of-line so the dashboard can reassemble.
+    size_t len = strlen(line);
+    size_t off = 0;
+    while (off < len) {
+        size_t n = len - off;
+        if (n > 20) n = 20;
+        s_infoChar->setValue((uint8_t*)(line + off), n);
+        s_infoChar->notify();
+        off += n;
+        vTaskDelay(1);   // let the stack drain between chunks
+    }
+    s_infoChar->setValue((uint8_t*)"\n", 1);
+    s_infoChar->notify();
 }
 
 String BleStream::readLine() {

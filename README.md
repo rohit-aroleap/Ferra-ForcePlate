@@ -33,13 +33,16 @@ Find the port with `Get-CimInstance Win32_PnPEntity | ? { $_.Name -match '\(COM\
 
 On boot the serial log (115200 baud) prints the BLE device name and starts advertising.
 
-## 2. Calibrate once (over USB serial)
+## 2. Calibrate once (from the dashboard)
 
-Calibration is a serial-only, interactive 2-point wizard and only needs redoing when the hardware changes (values persist in EEPROM). Open a serial monitor at 115200 baud and send `c`; it asks for two known weights in grams and walks through all four cells. Other serial/BLE commands:
+Calibration is a 2-point wizard and only needs redoing when the hardware changes (values persist in EEPROM). Easiest path: connect from the dashboard, open **⚙ Advanced → Calibration**, enter the two known weights in grams, press **Start**, and follow the plate's prompts with the **Next** button (empty plate → weight 1 and weight 2 on each corner in turn). Per-cell ✓/✗ badges show what's calibrated.
+
+The same wizard runs from any 115200-baud serial terminal with the identical commands. All serial/BLE commands:
 
 | Command | Effect |
 |---|---|
-| `c` | Full 2-point calibration (serial only) |
+| `cal <w1> <w2>` | Start 2-point calibration (weights in grams) |
+| `next` / `abort` | Advance the wizard / cancel it (previous values kept) |
 | `t` / `ZERO` | Tare all connected cells |
 | `t1`–`t4` | Tare a single cell (1=FL 2=FR 3=BL 4=BR) |
 | `s` / `STATUS` | Print status JSON |
@@ -60,7 +63,8 @@ If nobody is on the plate (total load < 15 kg) the game pauses and the dot parks
 
 - Device name **`FerraPlate`**, one custom service (distinct UUID base `7e40000x` so it never clashes with the IMU board or the Ferra strength machine in the BLE picker).
 - **Data** characteristic (`…0002`, NOTIFY): a 32-byte little-endian frame `{ uint32 ms, float copX_cm, float copY_cm, float weight_kg, float fl_kg, float fr_kg, float bl_kg, float br_kg }` — the last four are the per-corner loads, shown live in the dashboard's Advanced → Load cells card.
-- **Command** characteristic (`…0003`, WRITE): plain-text commands (`ZERO`, `START`, `STOP`, `STATUS`).
+- **Command** characteristic (`…0003`, WRITE): plain-text commands (`ZERO`, `START`, `STOP`, `STATUS`, `CAL <w1> <w2>`, `NEXT`, `ABORT`).
+- **Info** characteristic (`…0004`, NOTIFY): the firmware's human-readable `[INFO]`/`[CAL]`/`[STATUS]` lines, chunked into 20-byte notifies with a trailing `\n` per line — this is what drives the dashboard's calibration card and log.
 - On connect the firmware requests a **7.5 ms connection interval** — this is the fix for the ~0.5 s dot lag the IMU board hit; without it the host picks a slow interval and the notify stream batches/drops.
 
 ## Centre-of-pressure & game scale

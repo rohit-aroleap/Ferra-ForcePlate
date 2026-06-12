@@ -15,7 +15,11 @@
  *     float32) so the dashboard's parser reads them unchanged; the four
  *     per-cell loads are appended for the Advanced panel.
  *   - CMD characteristic (WRITE): plain-text commands from the central
- *     (ZERO / START / STOP / STATUS …), queued and drained by readLine().
+ *     (ZERO / START / STOP / STATUS / CAL …), queued and drained by readLine().
+ *   - INFO characteristic (NOTIFY): the same human-readable [INFO]/[CAL]/
+ *     [STATUS] lines that go to Serial, so the dashboard can drive the
+ *     calibration wizard. Lines are chunked to 20-byte notifies (safe at any
+ *     MTU) with a trailing '\n' marking end-of-line for reassembly.
  *
  * The big lag lesson from the IMU board carries over: on connect we request a
  * 7.5 ms connection interval (see config.h), otherwise the host picks a slow
@@ -35,6 +39,11 @@ public:
     // Safe to call from any task. cellsKg = per-corner load {FL, FR, BL, BR}.
     void sendFrame(uint32_t ms, float copX, float copY, float weight,
                    const float cellsKg[4]);
+
+    // Notify a human-readable text line to the central on the INFO
+    // characteristic (chunked, '\n'-terminated). No-op when disconnected.
+    // Call from the loop task only — not from the sampler.
+    void sendInfo(const char* line);
 
     // Pop the next queued text command from the central (non-blocking).
     // Returns "" if none pending.
