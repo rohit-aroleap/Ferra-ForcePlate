@@ -199,16 +199,21 @@ static long sampleCell(int idx, int n = 20) {
     return sum / n;
 }
 
-// ─── 2-point calibration state machine ───────────────────────────────────────
+// ─── Calibration state machine ───────────────────────────────────────────────
 // Command-driven (works identically from the dashboard over BLE and from a
 // serial terminal), replacing the old blocking serial wizard:
-//   cal <w1_g> <w2_g>  → start; prompts to empty the plate
-//   next               → advance (measure zero / weight 1 / weight 2 per cell)
+//   calq <w_g>         → QUICK: tare, then the known weight anywhere near the
+//                        plate centre; one shared scale for all cells (the sum
+//                        of corner forces equals the weight wherever it sits,
+//                        and same-model cells have matched sensitivity)
+//   cal <w1_g> <w2_g>  → FULL: 2-point, weight placed over each corner in turn
+//   next               → advance to the next step
 //   abort              → cancel, restore previous calibration offsets
 // Each step's prompt is broadcast as a [CAL] line; the dashboard shows the
 // latest prompt and gates its Next button on it. State survives a BLE
 // reconnect — only `abort`, completion, or reboot leaves the wizard.
-enum CalState { CAL_IDLE, CAL_WAIT_ZERO, CAL_WAIT_W1, CAL_WAIT_W2 };
+enum CalState { CAL_IDLE, CAL_WAIT_ZERO, CAL_WAIT_W1, CAL_WAIT_W2,
+                CAL_Q_WAIT_ZERO, CAL_Q_WAIT_W };
 static CalState calState = CAL_IDLE;
 static float    calW1 = 0.0f, calW2 = 0.0f;
 static int      calCell = -1;                 // cell being calibrated
@@ -248,6 +253,52 @@ static void calBegin(float w1, float w2) {
     broadcast("[CAL] STEP 1 — Remove ALL weight from the plate, then send: next");
 }
 
+static void calqBegin(float w) {
+    if (calState != CAL_IDLE) {
+        broadcast("[CAL] ERR: calibration already running — send 'next' or 'abort'.");
+        return;
+    }
+    if (connectedCount == 0) {
+        broadcast("[CAL] ERR: no connected cells to calibrate.");
+        return;
+    }
+    if (w <= 0.0f) {
+        broadcast("[CAL] ERR: weight must be positive. Usage: calq <weight_g>");
+        return;
+    }
+    calW1 = w;
+    calInProgress = true;          // pauses the sampler → streaming stops
+    calState = CAL_Q_WAIT_ZERO;
+    broadcast(String("[CAL] Quick calibration — known weight ") + String(w, 1) + "g");
+    broadcast("[CAL] STEP 1 — Remove ALL weight from the plate, then send: next");
+}
+
+// Tare every connected cell and remember the zero raws (shared by both flows).
+static void calMeasureZeroAll() {
+    broadcast("[CAL] Measuring zero on all cells (~2 s)...");
+    for (int i = 0; i < NUM_CELLS; i++) {
+        if (!cellConnected[i]) continue;
+        sensors.setOffset(i, 0);
+        calRawZero[i] = sampleCell(i);
+        sensors.setOffset(i, calRawZero[i]);
+        broadcast(String("[CAL]   ") + CELL_NAMES[i] + " zero_raw=" + calRawZero[i]);
+    }
+}
+
+// Common completion: leave the wizard, re-enable streaming, report.
+static void calFinish() {
+    calState      = CAL_IDLE;
+    calInProgress = false;
+    broadcast("[CAL] DONE — all connected cells calibrated.");
+    if (allConnectedCalibrated()) {
+        postingMode = true;
+        EEPROM.write(POSTING_ADDR, 1);
+        EEPROM.commit();
+        broadcast("[INFO] Streaming enabled.");
+    }
+    printStatus();
+}
+
 static void calAbort(const char* why) {
     if (calState == CAL_IDLE) {
         broadcast("[CAL] Nothing to abort.");
@@ -271,17 +322,46 @@ static void calNext() {
         return;
 
     case CAL_WAIT_ZERO: {
-        broadcast("[CAL] Measuring zero on all cells (~2 s)...");
-        for (int i = 0; i < NUM_CELLS; i++) {
-            if (!cellConnected[i]) continue;
-            sensors.setOffset(i, 0);
-            calRawZero[i] = sampleCell(i);
-            sensors.setOffset(i, calRawZero[i]);
-            broadcast(String("[CAL]   ") + CELL_NAMES[i] + " zero_raw=" + calRawZero[i]);
-        }
+        calMeasureZeroAll();
         calCell  = nextConnectedCell(-1);
         calState = CAL_WAIT_W1;
         calPromptPlace(2, calW1);
+        return;
+    }
+
+    case CAL_Q_WAIT_ZERO: {
+        calMeasureZeroAll();
+        calState = CAL_Q_WAIT_W;
+        broadcast(String("[CAL] STEP 2 — Place ") + String(calW1, 1) +
+                  "g near the CENTRE of the plate, then send: next");
+        return;
+    }
+
+    case CAL_Q_WAIT_W: {
+        broadcast("[CAL] Measuring (~2 s)...");
+        long sum = 0;
+        for (int i = 0; i < NUM_CELLS; i++) {
+            if (!cellConnected[i]) continue;
+            long raw = sampleCell(i);   // offset = zero, so tare-relative
+            sum += raw;
+            broadcast(String("[CAL]   ") + CELL_NAMES[i] + " raw=" + raw);
+        }
+        if (sum <= 0) {
+            // No "ERR" keyword: the wizard stays active so 'next' can retry.
+            broadcast("[CAL] No load detected — is the weight on the plate? Send 'next' to retry, or 'abort'.");
+            return;
+        }
+        // One shared counts-per-gram scale: the summed corner forces equal the
+        // weight wherever it sits, and same-model cells are sensitivity-matched.
+        float scale = (float)sum / calW1;
+        broadcast(String("[CAL] shared scale=") + String(scale, 4) +
+                  " (verify: " + String((float)sum / scale, 1) + "g)");
+        for (int i = 0; i < NUM_CELLS; i++) {
+            if (!cellConnected[i]) continue;
+            calData[i] = {true, scale, calRawZero[i], false};
+            eepromWriteCalData(i);
+        }
+        calFinish();
         return;
     }
 
@@ -322,16 +402,7 @@ static void calNext() {
             calState = CAL_WAIT_W1;
             calPromptPlace(2, calW1);
         } else {
-            calState      = CAL_IDLE;
-            calInProgress = false;
-            broadcast("[CAL] DONE — all connected cells calibrated.");
-            if (allConnectedCalibrated()) {
-                postingMode = true;
-                EEPROM.write(POSTING_ADDR, 1);
-                EEPROM.commit();
-                broadcast("[INFO] Streaming enabled.");
-            }
-            printStatus();
+            calFinish();
         }
         return;
     }
@@ -387,7 +458,8 @@ static void handleCommand(String cmd) {
         broadcast("[INFO]   stop     - Stop streaming");
         broadcast("[INFO]   t/zero   - Tare all connected cells");
         broadcast("[INFO]   t1-t4    - Tare single cell (1=FL 2=FR 3=BL 4=BR)");
-        broadcast("[INFO]   cal a b  - Start 2-point calibration with weights a, b (grams)");
+        broadcast("[INFO]   calq w   - Quick calibration: one weight (grams) near plate centre");
+        broadcast("[INFO]   cal a b  - Full 2-point calibration with weights a, b (grams)");
         broadcast("[INFO]   next     - Advance calibration to the next step");
         broadcast("[INFO]   abort    - Abort calibration, keep previous values");
         broadcast("[INFO]   x        - Reset calibration for all cells");
@@ -425,6 +497,14 @@ static void handleCommand(String cmd) {
     } else if (cmd == "t" || cmd == "zero") {
         for (int i = 0; i < NUM_CELLS; i++) tareCell(i);
         printStatus();
+
+    } else if (cmd.startsWith("calq")) {
+        float w = 0.0f;
+        if (sscanf(cmd.c_str(), "calq %f", &w) == 1) {
+            calqBegin(w);
+        } else {
+            broadcast("[CAL] Usage: calq <weight_g>   e.g. calq 5000");
+        }
 
     } else if (cmd.startsWith("cal")) {
         float w1 = 0.0f, w2 = 0.0f;

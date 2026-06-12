@@ -8,8 +8,12 @@
 //   f2 = back-left     f3 = back-right
 // ---------------------------------------------------------------------------
 
-#define HX711_DOUT_0  16    // Front-left  DATA
-#define HX711_CLK_0    4    // Front-left  CLK
+// NOTE: the FL and BR cables are crossed on this build (measured 2026-06-12:
+// loading the physical front-left corner moved the channel on pins 26/19 and
+// vice versa), so the pin map swaps those two corners in firmware instead of
+// re-crimping connectors.
+#define HX711_DOUT_0  26    // Front-left  DATA
+#define HX711_CLK_0   19    // Front-left  CLK
 
 #define HX711_DOUT_1  17    // Front-right DATA
 #define HX711_CLK_1    5    // Front-right CLK
@@ -17,8 +21,8 @@
 #define HX711_DOUT_2  25    // Back-left   DATA
 #define HX711_CLK_2   18    // Back-left   CLK
 
-#define HX711_DOUT_3  26    // Back-right  DATA
-#define HX711_CLK_3   19    // Back-right  CLK
+#define HX711_DOUT_3  16    // Back-right  DATA
+#define HX711_CLK_3    4    // Back-right  CLK
 
 // ---------------------------------------------------------------------------
 // Sampling

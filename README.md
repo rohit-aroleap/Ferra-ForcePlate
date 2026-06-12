@@ -35,13 +35,17 @@ On boot the serial log (115200 baud) prints the BLE device name and starts adver
 
 ## 2. Calibrate once (from the dashboard)
 
-Calibration is a 2-point wizard and only needs redoing when the hardware changes (values persist in EEPROM). Easiest path: connect from the dashboard, open **⚙ Advanced → Calibration**, enter the two known weights in grams, press **Start**, and follow the plate's prompts with the **Next** button (empty plate → weight 1 and weight 2 on each corner in turn). Per-cell ✓/✗ badges show what's calibrated.
+Calibration only needs redoing when the hardware changes (values persist in EEPROM). Connect from the dashboard and open **⚙ Advanced → Calibration**; per-cell ✓/✗ badges show what's calibrated. Two flavours:
 
-The same wizard runs from any 115200-baud serial terminal with the identical commands. All serial/BLE commands:
+- **Quick cal (recommended):** one known weight in W1 → empty plate → weight near the plate centre. Uses the fact that the four corner forces always sum to the total weight wherever it sits, and applies one shared scale to all (same-model) cells.
+- **Full cal:** 2-point per cell — W1 then W2 placed directly over each corner in turn. Only worth it if the cells' sensitivities differ enough to bias CoP.
+
+Follow the plate's prompts with the **Next** button. The same wizard runs from any 115200-baud serial terminal with the identical commands. All serial/BLE commands:
 
 | Command | Effect |
 |---|---|
-| `cal <w1> <w2>` | Start 2-point calibration (weights in grams) |
+| `calq <w>` | Quick calibration: one weight (grams) near plate centre |
+| `cal <w1> <w2>` | Full 2-point per-cell calibration (weights in grams) |
 | `next` / `abort` | Advance the wizard / cancel it (previous values kept) |
 | `t` / `ZERO` | Tare all connected cells |
 | `t1`–`t4` | Tare a single cell (1=FL 2=FR 3=BL 4=BR) |

@@ -287,11 +287,12 @@ button:disabled, select:disabled { opacity: .3; cursor: not-allowed; }
     <div class="controls" style="margin-bottom:8px;">
       <label style="font-size:12px;color:var(--text2);">W1 <input id="cal-w1" class="cal-input" type="number" min="1" value="5000"> g</label>
       <label style="font-size:12px;color:var(--text2);">W2 <input id="cal-w2" class="cal-input" type="number" min="1" value="10000"> g</label>
-      <button id="btn-cal-start" class="btn-green" disabled>Start</button>
+      <button id="btn-cal-quick" class="btn-green" disabled>Quick cal</button>
+      <button id="btn-cal-start" class="btn-green" disabled>Full cal</button>
       <button id="btn-cal-next"  class="btn-amber" disabled>Next ▸</button>
       <button id="btn-cal-abort" class="btn-red"   disabled>Abort</button>
     </div>
-    <div id="cal-instr" style="font-size:13px;color:var(--text2);min-height:18px;">Connect the plate, keep two known weights handy, then press Start — the plate's own prompts appear here.</div>
+    <div id="cal-instr" style="font-size:13px;color:var(--text2);min-height:18px;">Quick cal: one known weight (W1) near the plate centre — recommended. Full cal: W1 then W2 placed over each corner in turn. The plate's own prompts appear here.</div>
   </div>
 
   <div class="card">
@@ -530,6 +531,7 @@ function handleInfoLine(line) {
 }
 
 function setCalButtons() {
+  $('btn-cal-quick').disabled = !connected || !infoChar || calRunning;
   $('btn-cal-start').disabled = !connected || !infoChar || calRunning;
   $('btn-cal-next') .disabled = !connected || !calRunning;
   $('btn-cal-abort').disabled = !connected || !calRunning;
@@ -555,6 +557,17 @@ function renderCellStatus(line) {
     el.style.color = !c.connected ? 'var(--text3)' : c.calibrated ? 'var(--green)' : 'var(--red)';
   });
 }
+
+$('btn-cal-quick').addEventListener('click', () => {
+  const w1 = parseFloat($('cal-w1').value);
+  if (!(w1 > 0)) {
+    $('cal-instr').textContent = 'Enter the known weight in grams in W1.';
+    return;
+  }
+  calRunning = true;
+  setCalButtons();
+  sendCmd(`CALQ ${w1}`);
+});
 
 $('btn-cal-start').addEventListener('click', () => {
   const w1 = parseFloat($('cal-w1').value);
