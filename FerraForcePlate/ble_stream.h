@@ -8,10 +8,12 @@
  *
  * Replaces the old WiFi/WebSocket transport. A GATT peripheral advertises as
  * "FerraPlate" with one custom service (UUID base 7e40000x):
- *   - DATA characteristic (NOTIFY): a 16-byte little-endian frame
- *       { uint32 ms, float copX_cm, float copY_cm, float weight_kg }
- *     — same shape the IMU board used (uint32 ms + 3× float32), so the
- *     dashboard's frame parser is unchanged.
+ *   - DATA characteristic (NOTIFY): a 32-byte little-endian frame
+ *       { uint32 ms, float copX_cm, float copY_cm, float weight_kg,
+ *         float fl_kg, float fr_kg, float bl_kg, float br_kg }
+ *     — the first 16 bytes match the IMU board's frame (uint32 ms + 3×
+ *     float32) so the dashboard's parser reads them unchanged; the four
+ *     per-cell loads are appended for the Advanced panel.
  *   - CMD characteristic (WRITE): plain-text commands from the central
  *     (ZERO / START / STOP / STATUS …), queued and drained by readLine().
  *
@@ -29,9 +31,10 @@ public:
     // once the peripheral is up. Call once from setup().
     bool begin();
 
-    // Pack and notify the 16-byte frame. No-op if no central is connected.
-    // Safe to call from any task.
-    void sendFrame(uint32_t ms, float copX, float copY, float weight);
+    // Pack and notify the 32-byte frame. No-op if no central is connected.
+    // Safe to call from any task. cellsKg = per-corner load {FL, FR, BL, BR}.
+    void sendFrame(uint32_t ms, float copX, float copY, float weight,
+                   const float cellsKg[4]);
 
     // Pop the next queued text command from the central (non-blocking).
     // Returns "" if none pending.

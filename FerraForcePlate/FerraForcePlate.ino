@@ -494,7 +494,7 @@ void setup() {
 // ─── Sampler task (core 1, high priority) ────────────────────────────────────
 // Polls all 4 HX711s; when all have fresh data and the sample period elapsed,
 // computes calibrated grams → centre-of-pressure (cm) + total weight (kg),
-// EMA-smooths the CoP, and streams the 16-byte frame over BLE.
+// EMA-smooths the CoP, and streams the 32-byte frame over BLE.
 static void samplerTask(void* /*pv*/) {
     long     pendingF[4]     = {0, 0, 0, 0};
     bool     pendingReady[4] = {false, false, false, false};
@@ -585,8 +585,12 @@ static void samplerTask(void* /*pv*/) {
                     copX = copXf; copY = copYf;
                 }
 
+                float cellsKg[NUM_CELLS] = {
+                    vals[0] / 1000.0f, vals[1] / 1000.0f,
+                    vals[2] / 1000.0f, vals[3] / 1000.0f
+                };
                 g_sample_count++;
-                bleStream.sendFrame(millis(), copX, copY, weightKg);
+                bleStream.sendFrame(millis(), copX, copY, weightKg, cellsKg);
             }
         } else {
             pendingReady[0] = pendingReady[1] = pendingReady[2] = pendingReady[3] = false;

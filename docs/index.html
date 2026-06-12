@@ -311,6 +311,16 @@ button:disabled, select:disabled { opacity: .3; cursor: not-allowed; }
   </div>
 
   <div class="card">
+    <div class="card-title">Load cells</div>
+    <div class="session-stats">
+      <div class="ss-item"><div class="ss-label">Front-left</div>  <div class="ss-val" id="v-fl">–</div> <div class="ss-unit">kg</div></div>
+      <div class="ss-item"><div class="ss-label">Front-right</div> <div class="ss-val" id="v-fr">–</div> <div class="ss-unit">kg</div></div>
+      <div class="ss-item"><div class="ss-label">Back-left</div>   <div class="ss-val" id="v-bl">–</div> <div class="ss-unit">kg</div></div>
+      <div class="ss-item"><div class="ss-label">Back-right</div>  <div class="ss-val" id="v-br">–</div> <div class="ss-unit">kg</div></div>
+    </div>
+  </div>
+
+  <div class="card">
     <div class="card-title">CoP offset vs time</div>
     <div class="chart-wrap"><canvas id="timeChart"></canvas></div>
   </div>
@@ -351,7 +361,7 @@ button:disabled, select:disabled { opacity: .3; cursor: not-allowed; }
 // BLE UUIDs — must match config.h on the firmware.
 // ───────────────────────────────────────────────────────────────────────────
 const SVC_UUID    = "7e400001-b5a3-f393-e0a9-e50e24dcca9e";
-const ANGLES_UUID = "7e400002-b5a3-f393-e0a9-e50e24dcca9e";   // notify: 16-byte CoP frame
+const ANGLES_UUID = "7e400002-b5a3-f393-e0a9-e50e24dcca9e";   // notify: 32-byte CoP frame
 const CMD_UUID    = "7e400003-b5a3-f393-e0a9-e50e24dcca9e";   // write: text commands (ZERO …)
 
 // ── DOM helpers ────────────────────────────────────────────────────────────
@@ -498,8 +508,9 @@ async function refreshLink() {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// Frame unpacking. The firmware emits a 16-byte LE struct
-// (uint32 ms + 3× float32). On a local BLE notify link jitter is tiny, so
+// Frame unpacking. The firmware emits a 32-byte LE struct (uint32 ms +
+// 3× float32 CoP/weight + 4× float32 per-cell loads; older firmware sends
+// just the first 16 bytes). On a local BLE notify link jitter is tiny, so
 // we skip the device-time playhead the ESP32 WiFi dashboard used (that
 // version dealt with WebSocket bursts after WiFi stalls) and just process
 // every notification directly. PENDING_FRAMES collects everything that
@@ -510,6 +521,7 @@ let firstDeviceMs    = 0;
 let haveFirstDeviceMs = false;
 let lastRoll = 0, lastPitch = 0;
 let lastWeight = 0;   // kg — third frame float (was yaw on the IMU board); drives liveness
+let lastCells = null; // [FL, FR, BL, BR] kg — only present on 32-byte frames
 
 // ── Diagnostics — measure whether dot lag is a data-pipeline problem (BLE
 // batching / queue backup) or a render problem. Updated live in Advanced.
@@ -536,8 +548,15 @@ function onAngles(evt) {
   const roll   = dv.getFloat32(4,  true);   // CoP X (cm)
   const pitch  = dv.getFloat32(8,  true);   // CoP Y (cm)
   const weight = dv.getFloat32(12, true);   // total load (kg)
+  // 32-byte frames append the four per-corner loads (kg): FL, FR, BL, BR.
+  // Older 16-byte firmware (or a 23-byte-MTU link truncating the notify)
+  // simply lacks them — the Load cells card then stays at "–".
+  const cells = dv.byteLength >= 32
+    ? [dv.getFloat32(16, true), dv.getFloat32(20, true),
+       dv.getFloat32(24, true), dv.getFloat32(28, true)]
+    : null;
   const arrivalMs = performance.now();
-  PENDING_FRAMES.push({ deviceMs: ms, roll, pitch, weight, arrivalMs });
+  PENDING_FRAMES.push({ deviceMs: ms, roll, pitch, weight, cells, arrivalMs });
 
   // Record arrival statistics.
   if (diag.lastArrival > 0) {
@@ -2932,6 +2951,7 @@ $('btn-gear').addEventListener('click', () => {
 
     // Latest values feed the live tiles + tilt-plot dot.
     lastRoll = f.roll; lastPitch = f.pitch; lastWeight = f.weight;
+    if (f.cells) lastCells = f.cells;
 
     // Fading trail — visual-only, regardless of recording state.
     trailRoll[trailHead]  = f.roll;
@@ -2987,6 +3007,12 @@ $('btn-gear').addEventListener('click', () => {
     $('v-roll') .textContent = lastRoll .toFixed(2);
     $('v-pitch').textContent = lastPitch.toFixed(2);
     $('v-tilt') .textContent = tilt     .toFixed(2);
+    if (lastCells) {
+      $('v-fl').textContent = lastCells[0].toFixed(2);
+      $('v-fr').textContent = lastCells[1].toFixed(2);
+      $('v-bl').textContent = lastCells[2].toFixed(2);
+      $('v-br').textContent = lastCells[3].toFixed(2);
+    }
 
     if (recording && !swayFrozen) {
       const durS = (Date.now() - sessionStartMs) / 1000;

@@ -3,11 +3,11 @@
 The **Ferra Balance** game, ported from the IMU wobble board to a **4-load-cell force plate**. An ESP32 reads four HX711 load-cell amplifiers, computes the **centre of pressure (CoP)**, and streams it over **BLE** to a tablet running a single-file HTML game. The plate suits people whose balance is too weak for the wobble board — and, because it also reports total weight, it can tell when nobody is standing on it.
 
 ```
-4 × load cells ──HX711──► ESP32 ──BLE notify (16-byte frame)──► Tablet (index.html — the game)
+4 × load cells ──HX711──► ESP32 ──BLE notify (32-byte frame)──► Tablet (index.html — the game)
                                 ◄──── text commands (ZERO …) ───
 ```
 
-This is the sibling of [IMU-BalanceBoard](https://github.com/rohit-aroleap/IMU-BalanceBoard): the dashboard is a fork of that game, and the BLE frame keeps the same 16-byte shape so the game code is shared almost verbatim. The only real difference is the input — **centre-of-pressure in centimetres** instead of tilt in degrees — plus a weight signal the wobble board never had.
+This is the sibling of [IMU-BalanceBoard](https://github.com/rohit-aroleap/IMU-BalanceBoard): the dashboard is a fork of that game, and the first 16 bytes of the BLE frame keep the same shape so the game code is shared almost verbatim. The only real difference is the input — **centre-of-pressure in centimetres** instead of tilt in degrees — plus a weight signal the wobble board never had.
 
 ## Repo layout
 
@@ -59,7 +59,7 @@ If nobody is on the plate (total load < 15 kg) the game pauses and the dot parks
 ## BLE contract
 
 - Device name **`FerraPlate`**, one custom service (distinct UUID base `7e40000x` so it never clashes with the IMU board or the Ferra strength machine in the BLE picker).
-- **Data** characteristic (`…0002`, NOTIFY): a 16-byte little-endian frame `{ uint32 ms, float copX_cm, float copY_cm, float weight_kg }`.
+- **Data** characteristic (`…0002`, NOTIFY): a 32-byte little-endian frame `{ uint32 ms, float copX_cm, float copY_cm, float weight_kg, float fl_kg, float fr_kg, float bl_kg, float br_kg }` — the last four are the per-corner loads, shown live in the dashboard's Advanced → Load cells card.
 - **Command** characteristic (`…0003`, WRITE): plain-text commands (`ZERO`, `START`, `STOP`, `STATUS`).
 - On connect the firmware requests a **7.5 ms connection interval** — this is the fix for the ~0.5 s dot lag the IMU board hit; without it the host picks a slow interval and the notify stream batches/drops.
 

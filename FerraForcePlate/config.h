@@ -84,12 +84,14 @@
 // BLE — the tablet connects here (Web Bluetooth). DISTINCT UUID base from the
 // IMU board (6e40000x) and the Ferra strength machine (also 6e40000x) so the
 // browser picker never confuses devices in a gym full of Ferra BLE hardware.
-// Frame contract (matches the IMU board's 16-byte LE struct so the dashboard
-// parser is unchanged): uint32 ms, float copX_cm, float copY_cm, float weight_kg.
+// Frame contract (32-byte LE; the first 16 bytes match the IMU board's struct
+// so the dashboard parser reads them unchanged): uint32 ms, float copX_cm,
+// float copY_cm, float weight_kg, then the four per-cell loads
+// float fl_kg, fr_kg, bl_kg, br_kg.
 // ---------------------------------------------------------------------------
 #define BLE_DEVICE_NAME      "FerraPlate"
 #define BLE_SERVICE_UUID     "7e400001-b5a3-f393-e0a9-e50e24dcca9e"
-#define BLE_DATA_CHAR_UUID   "7e400002-b5a3-f393-e0a9-e50e24dcca9e"  // notify (16-byte frame)
+#define BLE_DATA_CHAR_UUID   "7e400002-b5a3-f393-e0a9-e50e24dcca9e"  // notify (32-byte frame)
 #define BLE_CMD_CHAR_UUID    "7e400003-b5a3-f393-e0a9-e50e24dcca9e"  // write  (text commands)
 
 // Connection-interval request (units of 1.25 ms). THE fix for ~0.5 s dot lag

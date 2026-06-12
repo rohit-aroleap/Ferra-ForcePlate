@@ -11,15 +11,17 @@ extern volatile uint32_t g_sample_count;
 
 BleStream bleStream;
 
-// ─── 16-byte frame (matches the IMU board's struct so the dashboard's
-//     DataView parser is unchanged). ESP32 is little-endian; sent verbatim. ──
+// ─── 32-byte frame. The first 16 bytes match the IMU board's struct so the
+//     dashboard's DataView parser reads them unchanged; the four per-cell
+//     loads follow. ESP32 is little-endian; sent verbatim. ──────────────────
 struct __attribute__((packed)) PlateFrame {
     uint32_t ms;
-    float    copX;     // cm
-    float    copY;     // cm
-    float    weight;   // kg
+    float    copX;      // cm
+    float    copY;      // cm
+    float    weight;    // kg
+    float    cells[4];  // kg per corner: FL, FR, BL, BR
 };
-static_assert(sizeof(PlateFrame) == 16, "frame must be 16 bytes");
+static_assert(sizeof(PlateFrame) == 32, "frame must be 32 bytes");
 
 // ─── BLE handles + shared state ──────────────────────────────────────────────
 static BLEServer*         s_server   = nullptr;
@@ -95,7 +97,9 @@ class CmdCallbacks : public BLECharacteristicCallbacks {
 // ─── Public API ───────────────────────────────────────────────────────────────
 bool BleStream::begin() {
     BLEDevice::init(BLE_DEVICE_NAME);
-    BLEDevice::setMTU(64);   // 16-byte frames + short text commands; default 23 also fine
+    BLEDevice::setMTU(64);   // 32-byte frames need ATT MTU ≥ 35; a host that skips
+                             // the MTU exchange truncates notifies to 20 B and the
+                             // dashboard simply hides the per-cell values
 
     s_server = BLEDevice::createServer();
     s_server->setCallbacks(new ServerCallbacks());
@@ -127,10 +131,12 @@ bool BleStream::begin() {
     return true;
 }
 
-void BleStream::sendFrame(uint32_t ms, float copX, float copY, float weight) {
+void BleStream::sendFrame(uint32_t ms, float copX, float copY, float weight,
+                          const float cellsKg[4]) {
     if (!s_connected || !s_dataChar) return;
 
-    PlateFrame f{ms, copX, copY, weight};
+    PlateFrame f{ms, copX, copY, weight,
+                 {cellsKg[0], cellsKg[1], cellsKg[2], cellsKg[3]}};
     s_dataChar->setValue((uint8_t*)&f, sizeof(f));
     s_dataChar->notify();
 
