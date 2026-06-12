@@ -339,28 +339,38 @@ static void calNext() {
 
     case CAL_Q_WAIT_W: {
         broadcast("[CAL] Measuring (~2 s)...");
-        long sum = 0;
+        long raws[NUM_CELLS] = {0};
+        long sumAbs = 0;
         for (int i = 0; i < NUM_CELLS; i++) {
             if (!cellConnected[i]) continue;
-            long raw = sampleCell(i);   // offset = zero, so tare-relative
-            sum += raw;
-            broadcast(String("[CAL]   ") + CELL_NAMES[i] + " raw=" + raw);
+            raws[i] = sampleCell(i);   // offset = zero, so tare-relative
+            sumAbs += labs(raws[i]);
+            broadcast(String("[CAL]   ") + CELL_NAMES[i] + " raw=" + raws[i]);
         }
-        if (sum <= 0) {
+        // Well above idle noise (~tens of counts), far below any real weight.
+        if (sumAbs < 1000) {
             // No "ERR" keyword: the wizard stays active so 'next' can retry.
             broadcast("[CAL] No load detected — is the weight on the plate? Send 'next' to retry, or 'abort'.");
             return;
         }
-        // One shared counts-per-gram scale: the summed corner forces equal the
-        // weight wherever it sits, and same-model cells are sensitivity-matched.
-        float scale = (float)sum / calW1;
-        broadcast(String("[CAL] shared scale=") + String(scale, 4) +
-                  " (verify: " + String((float)sum / scale, 1) + "g)");
+        // One shared counts-per-gram magnitude with a per-cell SIGN: a load
+        // cell counts up or down depending on bridge wiring, and with the
+        // weight near the centre every cell carries a real share of it, so
+        // the sign of its raw IS its polarity. The signed sum of corner
+        // forces equals the weight wherever it sits.
+        float scale = (float)sumAbs / calW1;
         for (int i = 0; i < NUM_CELLS; i++) {
             if (!cellConnected[i]) continue;
-            calData[i] = {true, scale, calRawZero[i], false};
+            if (labs(raws[i]) * 20 < sumAbs) {
+                broadcast(String("[CAL] WARN: ") + CELL_NAMES[i] +
+                          " saw <5% of the load — re-centre the weight and rerun if its readings look wrong.");
+            }
+            float s = (raws[i] < 0) ? -scale : scale;
+            calData[i] = {true, s, calRawZero[i], false};
             eepromWriteCalData(i);
+            broadcast(String("[CAL]   ") + CELL_NAMES[i] + " scale=" + String(s, 4));
         }
+        broadcast(String("[CAL] verify total: ") + String((float)sumAbs / scale, 1) + "g");
         calFinish();
         return;
     }
