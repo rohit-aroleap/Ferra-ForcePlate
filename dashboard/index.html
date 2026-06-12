@@ -1,0 +1,3134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ferra Balance — Force Plate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --bg:       #0f0f12;
+  --bg2:      #18181d;
+  --bg3:      #23232a;
+  --bg4:      #2a2a32;
+  --border:   rgba(255,255,255,.10);
+  --border2:  rgba(255,255,255,.14);
+  --text:     #f5f5f7;
+  --text2:    #a1a1a6;
+  --text3:    #55555c;
+  --green:    #4ade80;
+  --red:      #f87171;
+  --amber:    #fbbf24;
+  --green-bg: rgba(74,222,128,.1);
+  --red-bg:   rgba(248,113,113,.1);
+  --amber-bg: rgba(251,191,36,.1);
+  --blue:     #60a5fa;
+  --blue-bg:  rgba(96,165,250,.1);
+  --r:        6px;
+  --r2:       10px;
+  --font:     'IBM Plex Sans', sans-serif;
+  --mono:     'IBM Plex Mono', monospace;
+  --display:  'Outfit', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; }
+body { max-width: 1180px; margin: 0 auto; padding: 14px 16px 24px;
+       background: radial-gradient(1100px 700px at 50% -180px, #16221c 0%, var(--bg) 60%) fixed; }
+
+/* ── Top bar ─────────────────────────────────────────────────────────── */
+.topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; position: relative; }
+.player-btn { cursor: pointer; font-family: var(--display); font-weight: 600; letter-spacing: .03em; }
+.player-btn:hover { background: var(--bg4); }
+.player-menu { position: absolute; top: 40px; right: 52px; z-index: 50; min-width: 190px;
+  background: var(--bg2); border: 1px solid var(--border2); border-radius: 12px; padding: 6px;
+  box-shadow: 0 10px 32px rgba(0,0,0,.55); }
+.pm-item { padding: 9px 12px; border-radius: 8px; cursor: pointer; font-family: var(--display);
+  font-weight: 600; font-size: 13px; letter-spacing: .03em; color: var(--text2);
+  display: flex; align-items: center; gap: 8px; }
+.pm-item:hover { background: var(--bg3); color: var(--text); }
+.pm-item.sel { color: var(--green); }
+.pm-item.add { color: var(--blue); border-top: 1px solid var(--border); border-radius: 0 0 8px 8px; margin-top: 4px; padding-top: 11px; }
+.brand { font-family: var(--display); font-weight: 800; font-size: 20px; letter-spacing: .06em; }
+.brand b { color: var(--green); font-weight: 800; }
+.brand span { color: var(--text); font-weight: 600; }
+.spacer { flex: 1; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500;
+        padding: 4px 10px; border-radius: 20px; background: var(--bg3); border: 1px solid var(--border); color: var(--text2); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text3); flex-shrink: 0; }
+.dot.on  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.dot.rec { background: var(--red); animation: blink 1s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+button, select { font-family: var(--font); font-size: 13px; font-weight: 500; padding: 7px 14px;
+          border-radius: var(--r); border: 1px solid var(--border2); background: var(--bg3);
+          color: var(--text); cursor: pointer; transition: background .15s, opacity .15s, box-shadow .2s; }
+button:hover, select:hover { background: var(--bg4); }
+button:active { opacity: .75; }
+button:disabled, select:disabled { opacity: .3; cursor: not-allowed; }
+.btn-green { background: var(--green-bg); border-color: rgba(74,222,128,.3); color: var(--green); }
+.btn-green:hover { background: rgba(74,222,128,.18); }
+.btn-red   { background: var(--red-bg);   border-color: rgba(248,113,113,.3); color: var(--red); }
+.btn-red:hover   { background: rgba(248,113,113,.18); }
+.btn-amber { background: var(--amber-bg); border-color: rgba(251,191,36,.3);  color: var(--amber); }
+.btn-amber:hover { background: rgba(251,191,36,.18); }
+.btn-icon { width: 40px; height: 40px; padding: 0; border-radius: 50%; font-size: 16px;
+            display: inline-flex; align-items: center; justify-content: center; }
+.btn-icon.on { border-color: rgba(74,222,128,.4); color: var(--green); }
+
+/* ── Main game column ────────────────────────────────────────────────── */
+.main-col { max-width: 720px; margin: 0 auto; }
+
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r2); padding: 14px 16px; margin-bottom: 12px; }
+.card-title { font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text3); margin-bottom: 10px; }
+
+.arena-card { display: flex; flex-direction: column; align-items: center; gap: 12px;
+              padding: 16px; border-radius: 18px;
+              background: linear-gradient(180deg, rgba(74,222,128,.04), rgba(0,0,0,0)) , var(--bg2); }
+#tiltCanvas { display: block; border-radius: 14px; max-width: 100%; height: auto; }
+
+.card:fullscreen, .arena-card:fullscreen {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--bg); border: none; border-radius: 0; gap: 14px;
+}
+.arena-card:fullscreen #tiltCanvas { max-height: 84vh; max-width: 96vw; width: auto; height: auto; }
+
+.hero-strip { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.btn-hero { font-family: var(--display); font-weight: 700; font-size: 17px; letter-spacing: .06em;
+            padding: 13px 44px; border-radius: 999px; border: none;
+            background: linear-gradient(180deg, #34d399, #16a34a); color: #062b18;
+            box-shadow: 0 0 26px rgba(74,222,128,.30), inset 0 1px 0 rgba(255,255,255,.25); }
+.btn-hero:hover { background: linear-gradient(180deg, #41e0a5, #17b054); box-shadow: 0 0 34px rgba(74,222,128,.45), inset 0 1px 0 rgba(255,255,255,.25); }
+.btn-hero:disabled { box-shadow: none; }
+.btn-end { font-family: var(--display); font-weight: 600; font-size: 14px; letter-spacing: .04em;
+           padding: 11px 26px; border-radius: 999px;
+           background: var(--red-bg); border: 1px solid rgba(248,113,113,.35); color: var(--red); }
+.btn-end:hover { background: rgba(248,113,113,.18); }
+
+.g-status { text-align: center; font-family: var(--display); font-weight: 500; font-size: 14px;
+            color: var(--text2); letter-spacing: .02em; min-height: 18px; }
+
+/* ── Mode cards ──────────────────────────────────────────────────────── */
+.mode-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 14px 0 12px; }
+@media (max-width: 640px) { .mode-cards { grid-template-columns: repeat(2, 1fr); } }
+.mode-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+             padding: 12px 12px 11px; cursor: pointer; text-align: left;
+             transition: border-color .15s, box-shadow .2s, transform .1s; position: relative; }
+.mode-card:hover { transform: translateY(-1px); border-color: var(--border2); }
+.mode-card .mc-icon { font-size: 20px; margin-bottom: 6px; }
+.mode-card .mc-name { font-family: var(--display); font-weight: 700; font-size: 13.5px; letter-spacing: .02em; margin-bottom: 3px; }
+.mode-card .mc-desc { font-size: 11px; color: var(--text2); line-height: 1.35; }
+.mode-card.sel { border-color: var(--mc, var(--green)); box-shadow: 0 0 16px color-mix(in srgb, var(--mc, var(--green)) 28%, transparent); }
+.mode-card.sel .mc-name { color: var(--mc, var(--green)); }
+.mode-cards.locked .mode-card { opacity: .45; pointer-events: none; }
+.mc-chips { display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
+.mc-chip { font-size: 10.5px; font-weight: 600; font-family: var(--display); letter-spacing: .03em;
+           padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border2);
+           background: var(--bg3); color: var(--text2); cursor: pointer; }
+.mc-chip.sel { border-color: var(--mc, var(--green)); color: var(--mc, var(--green));
+               background: color-mix(in srgb, var(--mc, var(--green)) 12%, transparent); }
+
+/* Daily challenge banner — one wide card above the mode grid */
+.daily-card { display: flex; align-items: center; gap: 12px; margin: 14px 0 0;
+              background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+              padding: 11px 14px; cursor: pointer;
+              transition: border-color .15s, box-shadow .2s, transform .1s; }
+.daily-card:hover { transform: translateY(-1px); border-color: var(--border2); }
+.daily-card.sel { border-color: var(--amber); box-shadow: 0 0 16px rgba(251,191,36,.25); }
+.daily-card .dc-icon { font-size: 20px; }
+.daily-card .dc-name { font-family: var(--display); font-weight: 700; font-size: 13.5px; letter-spacing: .02em; }
+.daily-card.sel .dc-name { color: var(--amber); }
+.daily-card .dc-desc { font-size: 11px; color: var(--text2); line-height: 1.35; }
+.daily-card .dc-tag { margin-left: auto; font-family: var(--display); font-weight: 700; font-size: 10.5px;
+                      letter-spacing: .05em; color: var(--amber); border: 1px solid rgba(251,191,36,.35);
+                      border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
+.daily-card.locked { opacity: .45; pointer-events: none; }
+
+/* Stance selector — Both / Left / Right */
+.stance-row { display: flex; align-items: center; gap: 6px; margin: 10px 0 12px; }
+.stance-row .st-label { font-size: 10.5px; font-weight: 600; letter-spacing: .07em;
+                        text-transform: uppercase; color: var(--text3); margin-right: 4px; }
+.stance-row.locked .mc-chip { opacity: .45; pointer-events: none; }
+
+.g-final { margin-top: 2px; margin-bottom: 12px; padding: 12px 14px; background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--r2);
+           display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--text2); align-items: baseline; }
+.g-final strong { color: var(--text); font-family: var(--mono); font-size: 16px; margin-left: 4px; }
+.g-final .g-best-badge { color: var(--amber); font-weight: 600; }
+.g-final .g-delta-good { color: var(--green); font-family: var(--mono); font-size: 12px; margin-left: 6px; }
+.g-final .g-delta-bad  { color: var(--text3); font-family: var(--mono); font-size: 12px; margin-left: 6px; }
+.g-final input { width: 64px; font-family: var(--mono); text-transform: uppercase; text-align: center;
+                 background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--r);
+                 color: var(--text); padding: 5px 6px; font-size: 13px; }
+
+.hidden-tiles { display: none; }
+
+/* ── Advanced drawer (engineering view) ──────────────────────────────── */
+.metrics { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; margin-bottom: 10px; }
+@media (max-width: 600px) { .metrics { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+.metric { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r2); padding: 12px 14px; }
+.m-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .07em; color: var(--text3); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+.m-tag { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.m-val  { font-size: 24px; font-weight: 500; font-family: var(--mono); line-height: 1; }
+.m-unit { font-size: 11px; color: var(--text3); font-family: var(--mono); margin-top: 3px; }
+
+.chart-wrap { position: relative; height: 180px; }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 4px; }
+
+.session-stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; }
+@media (max-width: 600px) { .session-stats { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+.ss-item { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r2); padding: 12px 14px; }
+.ss-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .07em; color: var(--text3); margin-bottom: 6px; }
+.ss-val { font-size: 22px; font-weight: 500; font-family: var(--mono); line-height: 1; color: var(--text); }
+.ss-unit { font-size: 11px; color: var(--text3); font-family: var(--mono); margin-top: 3px; }
+
+.adv { margin-bottom: 12px; }
+.adv > summary { cursor: pointer; list-style: none; padding: 10px 16px;
+                  font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase;
+                  color: var(--text3); background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r2);
+                  display: flex; align-items: center; gap: 8px; transition: background .15s, color .15s; }
+.adv > summary::-webkit-details-marker { display: none; }
+.adv > summary::before { content: '▸'; font-size: 12px; color: var(--text3); transition: transform .2s; }
+.adv[open] > summary::before { transform: rotate(90deg); }
+.adv > summary:hover { background: var(--bg3); color: var(--text2); }
+.adv[open] > summary { margin-bottom: 12px; }
+
+.log { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r);
+       height: 110px; overflow-y: auto; padding: 6px 10px; font-family: var(--mono); font-size: 11px; color: var(--text3); }
+.log-line { padding: 1px 0; }
+.log-ok   { color: var(--green); }
+.log-warn { color: var(--amber); }
+.log-err  { color: var(--red); }
+
+.hist-list { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; }
+.hist-row { display: grid; grid-template-columns: 1.5fr 1.8fr .9fr .8fr .6fr; gap: 8px;
+            font-family: var(--mono); font-size: 11.5px; color: var(--text2);
+            padding: 4px 8px; border-radius: 6px; align-items: baseline; }
+.hist-row:nth-child(odd) { background: var(--bg3); }
+.hist-row .hr-score { color: var(--text); }
+.hist-row.me .hr-name { color: var(--green); }
+.lb-mode { font-family: var(--display); font-weight: 700; font-size: 11.5px; letter-spacing: .04em;
+           color: var(--text2); margin: 10px 0 4px; padding-left: 2px; }
+.lb-mode:first-child { margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><b>FERRA</b> <span>BALANCE</span></div>
+  <div class="spacer"></div>
+  <button class="pill player-btn" id="btn-player" title="Switch player">👤 <span id="player-name">PLAYER</span> ▾</button>
+  <div class="player-menu" id="player-menu" style="display:none;"></div>
+  <span class="pill" id="conn-pill">
+    <span class="dot" id="conn-dot"></span>
+    <span id="conn-text">disconnected</span>
+  </span>
+  <button class="btn-icon" id="btn-gear" title="Settings & diagnostics">⚙</button>
+</div>
+
+<div class="main-col">
+
+  <div class="card arena-card" id="tilt-card">
+    <canvas id="tiltCanvas" width="460" height="460"></canvas>
+    <div class="g-status" id="g-status">Connect your plate to play</div>
+    <div class="hero-strip">
+      <button id="btn-record" class="btn-hero">🔗 CONNECT PLATE</button>
+      <button id="btn-stop"   class="btn-end" style="display:none;">■ End game</button>
+      <button id="btn-sound"  class="btn-icon" title="Sound">🔇</button>
+      <button id="btn-fs"     class="btn-icon" title="Fullscreen">⛶</button>
+    </div>
+  </div>
+
+  <div class="daily-card" id="daily-card"></div>
+
+  <div class="mode-cards" id="mode-cards"></div>
+
+  <div class="stance-row" id="stance-row"></div>
+
+  <div class="g-final" id="g-final" style="display:none;"></div>
+
+  <div class="card" id="lb-card">
+    <div class="card-title" id="lb-card-title">Leaderboard</div>
+    <div id="lb-main" class="hist-list" style="margin-top:0;"></div>
+  </div>
+
+  <!-- Hidden legacy tiles + select: the game engine writes to these; the
+       visible UI is the canvas HUD + mode cards. -->
+  <div class="hidden-tiles">
+    <select id="g-mode"></select>
+    <span id="g-phase"></span><span id="g-round"></span>
+    <span id="g-ring"></span><span id="g-best"></span>
+  </div>
+
+</div><!-- /main-col -->
+
+<details class="adv" id="adv-details">
+  <summary>Advanced — board controls, diagnostics, live values, time chart, session metrics &amp; log</summary>
+
+  <div class="card">
+    <div class="card-title">Board controls</div>
+    <div class="controls">
+      <button id="btn-connect"    class="btn-green">Connect</button>
+      <button id="btn-disconnect" class="btn-red"   disabled>Disconnect</button>
+      <button id="btn-zero"       class="btn-amber" disabled>Zero</button>
+      <span style="font-size:12px;color:var(--text3);">Ending a game auto-saves the session CSV.</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">BLE data diagnostics</div>
+    <div class="session-stats">
+      <div class="ss-item"><div class="ss-label">Effective rate</div> <div class="ss-val" id="d-hz">–</div>    <div class="ss-unit">Hz received</div></div>
+      <div class="ss-item"><div class="ss-label">Arrival gap</div>    <div class="ss-val" id="d-gap">–</div>   <div class="ss-unit">ms avg / max</div></div>
+      <div class="ss-item"><div class="ss-label">Queue depth</div>    <div class="ss-val" id="d-queue">–</div> <div class="ss-unit">avg / max per tick</div></div>
+      <div class="ss-item"><div class="ss-label">Burstiness</div>     <div class="ss-val" id="d-burst">–</div> <div class="ss-unit">% gaps &gt; 2× median</div></div>
+      <div class="ss-item"><div class="ss-label">Device gap</div>     <div class="ss-val" id="d-dev">–</div>   <div class="ss-unit">ms (firmware cadence)</div></div>
+      <div class="ss-item"><div class="ss-label">Frame age</div>      <div class="ss-val" id="d-age">–</div>   <div class="ss-unit">ms when drawn</div></div>
+      <div class="ss-item"><div class="ss-label">rAF rate</div>       <div class="ss-val" id="d-raf">–</div>   <div class="ss-unit">Hz draw loop</div></div>
+      <div class="ss-item"><div class="ss-label">Verdict</div>       <div class="ss-val" id="d-verdict" style="font-size:13px;color:var(--text2);">–</div><div class="ss-unit">&nbsp;</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Live</div>
+    <div class="metrics">
+      <div class="metric">
+        <div class="m-label"><span class="m-tag" style="background:#60a5fa"></span>CoP X</div>
+        <div class="m-val" style="color:#60a5fa" id="v-roll">–</div>
+        <div class="m-unit">cm</div>
+      </div>
+      <div class="metric">
+        <div class="m-label"><span class="m-tag" style="background:#4ade80"></span>CoP Y</div>
+        <div class="m-val" style="color:#4ade80" id="v-pitch">–</div>
+        <div class="m-unit">cm</div>
+      </div>
+      <div class="metric">
+        <div class="m-label"><span class="m-tag" style="background:var(--text2)"></span>Offset</div>
+        <div class="m-val" id="v-tilt">–</div>
+        <div class="m-unit">√(x²+y²) cm</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">CoP offset vs time</div>
+    <div class="chart-wrap"><canvas id="timeChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Session metrics</div>
+    <div class="session-stats">
+      <div class="ss-item"><div class="ss-label">Samples</div>      <div class="ss-val" id="ss-n">–</div>   <div class="ss-unit">count</div></div>
+      <div class="ss-item"><div class="ss-label">Duration</div>     <div class="ss-val" id="ss-dur">–</div> <div class="ss-unit">mm:ss</div></div>
+      <div class="ss-item"><div class="ss-label">Max offset</div>   <div class="ss-val" id="ss-peak">–</div><div class="ss-unit">cm</div></div>
+      <div class="ss-item"><div class="ss-label">Avg offset</div>   <div class="ss-val" id="ss-avg">–</div> <div class="ss-unit">cm</div></div>
+      <div class="ss-item"><div class="ss-label">Sway path</div>    <div class="ss-val" id="ss-path">–</div><div class="ss-unit">cm</div></div>
+      <div class="ss-item"><div class="ss-label">Mean velocity</div><div class="ss-val" id="ss-vel">–</div> <div class="ss-unit">cm/s</div></div>
+      <div class="ss-item"><div class="ss-label">Sway area</div>    <div class="ss-val" id="ss-sway">–</div><div class="ss-unit">cm²</div></div>
+      <div class="ss-item"><div class="ss-label">Status</div>       <div class="ss-val" id="ss-state" style="font-size:14px;color:var(--text2);">idle</div><div class="ss-unit">&nbsp;</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" id="hist-title">Game history</div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <span id="hist-summary" style="font-size:13px;color:var(--text2);">No sessions yet</span>
+      <span class="spacer"></span>
+      <button id="btn-clear-hist">Clear history</button>
+      <button id="btn-clear-lb">Clear leaderboard</button>
+    </div>
+    <div id="hist-list" class="hist-list"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:0;">
+    <div class="card-title">Log</div>
+    <div class="log" id="log"></div>
+  </div>
+</details>
+
+<script>
+// ───────────────────────────────────────────────────────────────────────────
+// BLE UUIDs — must match config.h on the firmware.
+// ───────────────────────────────────────────────────────────────────────────
+const SVC_UUID    = "7e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const ANGLES_UUID = "7e400002-b5a3-f393-e0a9-e50e24dcca9e";   // notify: 16-byte CoP frame
+const CMD_UUID    = "7e400003-b5a3-f393-e0a9-e50e24dcca9e";   // write: text commands (ZERO …)
+
+// ── DOM helpers ────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+function log(msg, cls = '') {
+  const line = document.createElement('div');
+  line.className = 'log-line ' + (cls ? 'log-' + cls : '');
+  const ts = new Date().toLocaleTimeString();
+  line.textContent = `[${ts}] ${msg}`;
+  $('log').appendChild(line);
+  $('log').scrollTop = $('log').scrollHeight;
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// BLE state.
+// ───────────────────────────────────────────────────────────────────────────
+let device     = null;
+let anglesChar = null;
+let cmdChar    = null;
+let connected  = false;
+
+function setConnected(yes) {
+  connected = yes;
+  $('conn-dot').className  = yes ? 'dot on' : 'dot';
+  $('conn-text').textContent = yes ? 'connected' : 'disconnected';
+  $('btn-connect').disabled    = yes;
+  $('btn-disconnect').disabled = !yes;
+  $('btn-zero').disabled       = !yes;
+  updateHero();
+  refreshStatus();
+}
+
+if (!navigator.bluetooth) {
+  log('Web Bluetooth not available. Open this page in Chrome or Edge.', 'err');
+}
+
+// Attach (or re-attach) to the GATT service of the already-chosen device.
+// Used by the first connect and by link refreshes — a fresh GATT connection
+// renegotiates connection parameters, recovering from OS interval downshifts.
+async function attachGatt() {
+  const server = await device.gatt.connect();
+  const svc    = await server.getPrimaryService(SVC_UUID);
+  anglesChar   = await svc.getCharacteristic(ANGLES_UUID);
+  cmdChar      = await svc.getCharacteristic(CMD_UUID);
+  await anglesChar.startNotifications();
+  anglesChar.addEventListener('characteristicvaluechanged', onAngles);
+  // Fresh link → fresh link-health statistics + recalibrated baseline.
+  diag.arrivalGaps.length = 0; diag.deviceGaps.length = 0;
+  diag.lastArrival = 0; diag.lastDeviceMs = 0;
+  diag.baselineGap = 0;
+  setConnected(true);
+}
+
+async function connectBoard() {
+  if (!navigator.bluetooth) { log('Web Bluetooth not available in this browser.', 'err'); return; }
+  try {
+    log('Requesting device…');
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [SVC_UUID] }],
+      optionalServices: [SVC_UUID],
+    });
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+    log('Connecting…');
+    await attachGatt();
+    resetAllVisualsAndAccumulators();
+    log('Connected. Streaming.', 'ok');
+  } catch (e) {
+    log('Connect failed: ' + e.message, 'err');
+    setConnected(false);
+  }
+}
+$('btn-connect').addEventListener('click', connectBoard);
+
+$('btn-disconnect').addEventListener('click', () => {
+  if (device && device.gatt.connected) device.gatt.disconnect();
+});
+
+async function onDisconnected() {
+  setConnected(false);
+  droneStop();
+  if (intentionalDisconnect) return;      // refreshLink manages its own flow
+  log('Connection lost — reconnecting…', 'warn');
+  $('g-status').textContent = 'Reconnecting…';
+  if (device) {
+    for (let i = 0; i < 3 && !connected; i++) {
+      await new Promise(r => setTimeout(r, 700 + i * 700));
+      try { await attachGatt(); } catch {}
+    }
+  }
+  if (connected) { log('Reconnected — carrying on.', 'ok'); refreshStatus(); return; }
+  log('Could not reconnect. Power-cycle the plate, then Connect.', 'err');
+  if (recording) stopRecording();
+  refreshStatus();
+}
+
+async function sendCmd(text) {
+  if (!cmdChar) return;
+  try {
+    const buf = new TextEncoder().encode(text);
+    await cmdChar.writeValueWithoutResponse(buf);
+    log('→ ' + text);
+  } catch (e) {
+    log('Command failed: ' + e.message, 'err');
+  }
+}
+
+// ── Link health + refresh ──────────────────────────────────────────────────
+// The frame cadence differs by board/OS, so "degraded" is judged against a
+// BASELINE measured in the first seconds after each (re)connect — never an
+// assumed number. Degraded = recent device gaps ≥1.6× baseline (frames are
+// being dropped relative to how this very link started out).
+let intentionalDisconnect = false;   // our own refresh — don't auto-reconnect
+let lastAutoRefreshMs = 0;
+const AUTO_REFRESH_COOLDOWN_MS = 5 * 60 * 1000;
+
+function linkDegraded() {
+  if (!diag.baselineGap) return false;            // not calibrated yet
+  const g = diag.deviceGaps;
+  if (g.length < 50) return false;
+  const recent = g.slice(-50);
+  const avg = recent.reduce((a, b) => a + b, 0) / recent.length;
+  return avg > Math.max(diag.baselineGap * 1.6, diag.baselineGap + 8);
+}
+
+async function refreshLink() {
+  if (!device) return false;
+  intentionalDisconnect = true;
+  $('g-status').textContent = 'Refreshing board link…';
+  log('Refreshing BLE connection…', 'warn');
+  try { if (device.gatt.connected) device.gatt.disconnect(); } catch {}
+  let ok = false;
+  for (let i = 0; i < 3 && !ok; i++) {
+    await new Promise(r => setTimeout(r, 600 + i * 600));   // board re-adverts
+    try { await attachGatt(); ok = true; }
+    catch (e) { log(`Reattach attempt ${i + 1} failed: ${e.message}`, 'warn'); }
+  }
+  intentionalDisconnect = false;
+  if (ok) { log('Link refreshed.', 'ok'); return true; }
+  log('Link refresh failed — try power-cycling the plate.', 'err');
+  setConnected(false);
+  return false;
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Frame unpacking. The firmware emits a 16-byte LE struct
+// (uint32 ms + 3× float32). On a local BLE notify link jitter is tiny, so
+// we skip the device-time playhead the ESP32 WiFi dashboard used (that
+// version dealt with WebSocket bursts after WiFi stalls) and just process
+// every notification directly. PENDING_FRAMES collects everything that
+// arrived since the last rAF tick so the rAF loop can drain them in order.
+// ───────────────────────────────────────────────────────────────────────────
+const PENDING_FRAMES = [];
+let firstDeviceMs    = 0;
+let haveFirstDeviceMs = false;
+let lastRoll = 0, lastPitch = 0;
+let lastWeight = 0;   // kg — third frame float (was yaw on the IMU board); drives liveness
+
+// ── Diagnostics — measure whether dot lag is a data-pipeline problem (BLE
+// batching / queue backup) or a render problem. Updated live in Advanced.
+const diag = {
+  arrivalGaps: [],     // wall-clock ms between consecutive BLE notifications
+  deviceGaps:  [],     // firmware deviceMs delta between consecutive frames
+  lastArrival: 0,
+  lastDeviceMs: 0,
+  framesRecv:  0,      // frames received since last readout
+  rafTicks:    0,      // rAF ticks since last readout
+  queueSum:    0,      // sum of pre-drain queue depths (for avg)
+  queueSamples: 0,
+  queueMax:    0,
+  lastFrameAge: 0,     // age (ms) of newest frame at the moment it was drawn
+};
+
+function onAngles(evt) {
+  const dv = evt.target.value;
+  if (dv.byteLength < 16) return;
+  const ms     = dv.getUint32 (0,  true);
+  // The plate streams CoP-x (cm), CoP-y (cm), total weight (kg). We keep the
+  // names `roll`/`pitch` for the two axes so the whole game/plot code is
+  // unchanged — only the unit (cm) and the third value (weight) differ.
+  const roll   = dv.getFloat32(4,  true);   // CoP X (cm)
+  const pitch  = dv.getFloat32(8,  true);   // CoP Y (cm)
+  const weight = dv.getFloat32(12, true);   // total load (kg)
+  const arrivalMs = performance.now();
+  PENDING_FRAMES.push({ deviceMs: ms, roll, pitch, weight, arrivalMs });
+
+  // Record arrival statistics.
+  if (diag.lastArrival > 0) {
+    const g = arrivalMs - diag.lastArrival;
+    diag.arrivalGaps.push(g);
+    if (diag.arrivalGaps.length > 300) diag.arrivalGaps.shift();
+  }
+  diag.lastArrival = arrivalMs;
+  if (diag.lastDeviceMs > 0) {
+    diag.deviceGaps.push(ms - diag.lastDeviceMs);
+    if (diag.deviceGaps.length > 300) diag.deviceGaps.shift();
+  }
+  diag.lastDeviceMs = ms;
+  diag.framesRecv++;
+  // Calibrate this connection's natural cadence once, from early frames.
+  if (!diag.baselineGap && diag.deviceGaps.length >= 60) {
+    diag.baselineGap = median(diag.deviceGaps.slice(5, 55));
+  }
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Arena — one canvas, two skins.
+//   GAME skin (default): radial-gradient floor, faint glow rings, vignette,
+//   no degree labels / crosshairs / axis captions. Looks like a game arena.
+//   INSTRUMENT skin (when the Advanced drawer is open): the calibrated polar
+//   plot with labelled rings + axes for you / a physio.
+// The static scenery is cached on an offscreen canvas; per-frame work is
+// drawImage + dynamic layers (ring, trail, dot, particles, popups, HUD).
+// ───────────────────────────────────────────────────────────────────────────
+const tiltCanvas = $('tiltCanvas');
+const tiltCtx    = tiltCanvas.getContext('2d');
+const maxAngle   = 12;   // locked — plot scale is ±12 cm of centre-of-pressure travel
+
+const staticCanvas = document.createElement('canvas');
+staticCanvas.width  = tiltCanvas.width;
+staticCanvas.height = tiltCanvas.height;
+const staticCtx    = staticCanvas.getContext('2d');
+
+const advDetails = document.querySelector('details.adv');
+const isAdvOpen  = () => !!(advDetails && advDetails.open);
+const instrumentSkin = () => isAdvOpen();
+
+function rebuildStaticBackground() {
+  const W = staticCanvas.width, H = staticCanvas.height;
+  const cx = W / 2, cy = H / 2;
+  const radius = Math.min(W, H) / 2 - 32;
+  const scale  = radius / maxAngle;
+
+  staticCtx.clearRect(0, 0, W, H);
+
+  if (!instrumentSkin()) {
+    // ── GAME skin ──
+    const floor = staticCtx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    floor.addColorStop(0,   '#17211c');
+    floor.addColorStop(0.6, '#131418');
+    floor.addColorStop(1,   '#0e0e11');
+    staticCtx.fillStyle = floor;
+    staticCtx.beginPath(); staticCtx.arc(cx, cy, radius, 0, Math.PI * 2); staticCtx.fill();
+
+    // Faint glow grid — rings without labels.
+    for (const r of [5, 10, 15, 20, 25, 30]) {
+      staticCtx.beginPath(); staticCtx.arc(cx, cy, r * scale, 0, Math.PI * 2);
+      staticCtx.strokeStyle = r % 15 === 0 ? 'rgba(74,222,128,0.07)' : 'rgba(255,255,255,0.035)';
+      staticCtx.lineWidth = 1; staticCtx.stroke();
+    }
+
+    // Vignette darkening toward the edge.
+    const vig = staticCtx.createRadialGradient(cx, cy, radius * 0.55, cx, cy, radius);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.45)');
+    staticCtx.fillStyle = vig;
+    staticCtx.beginPath(); staticCtx.arc(cx, cy, radius, 0, Math.PI * 2); staticCtx.fill();
+
+    // Rim glow.
+    staticCtx.beginPath(); staticCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+    staticCtx.strokeStyle = 'rgba(74,222,128,0.22)'; staticCtx.lineWidth = 2;
+    staticCtx.shadowColor = 'rgba(74,222,128,0.5)'; staticCtx.shadowBlur = 14;
+    staticCtx.stroke(); staticCtx.shadowBlur = 0;
+    return;
+  }
+
+  // ── INSTRUMENT skin ──
+  staticCtx.fillStyle = '#161618';
+  staticCtx.beginPath(); staticCtx.arc(cx, cy, radius, 0, Math.PI * 2); staticCtx.fill();
+
+  const rings = [1, 2, 5, 10, 15, 20, 30, 45, 60, 90].filter(r => r <= maxAngle);
+  staticCtx.font = '9px IBM Plex Mono, monospace';
+  staticCtx.textAlign = 'center';
+  for (const r of rings) {
+    const rPx = r * scale;
+    staticCtx.beginPath(); staticCtx.arc(cx, cy, rPx, 0, Math.PI * 2);
+    staticCtx.strokeStyle = r % 10 === 0 ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.05)';
+    staticCtx.lineWidth = 1; staticCtx.stroke();
+    staticCtx.fillStyle = 'rgba(255,255,255,0.22)';
+    staticCtx.fillText(`${r}cm`, cx, cy - rPx + 11);
+  }
+
+  // Crosshairs — go edge-to-edge so no clip needed.
+  staticCtx.strokeStyle = 'rgba(255,255,255,0.14)'; staticCtx.lineWidth = 1;
+  staticCtx.setLineDash([4, 5]);
+  staticCtx.beginPath(); staticCtx.moveTo(cx - radius, cy); staticCtx.lineTo(cx + radius, cy); staticCtx.stroke();
+  staticCtx.beginPath(); staticCtx.moveTo(cx, cy - radius); staticCtx.lineTo(cx, cy + radius); staticCtx.stroke();
+  staticCtx.setLineDash([]);
+
+  // Outer border + axis labels.
+  staticCtx.beginPath(); staticCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+  staticCtx.strokeStyle = 'rgba(255,255,255,0.14)'; staticCtx.lineWidth = 1.5; staticCtx.stroke();
+  staticCtx.fillStyle = 'rgba(255,255,255,0.35)';
+  staticCtx.font = '11px IBM Plex Sans, sans-serif';
+  staticCtx.textAlign = 'center';
+  staticCtx.fillText('Pitch (+)', cx, cy - radius - 10);
+  staticCtx.fillText('Pitch (−)', cx, cy + radius + 18);
+  staticCtx.textAlign = 'left';  staticCtx.fillText('Roll (+)',  cx + radius + 8, cy + 4);
+  staticCtx.textAlign = 'right'; staticCtx.fillText('Roll (−)',  cx - radius - 8, cy + 4);
+}
+rebuildStaticBackground();
+
+const TRAIL_LEN  = 1200;       // ~12 s at the firmware's 100 Hz output
+const trailRoll  = new Float32Array(TRAIL_LEN);
+const trailPitch = new Float32Array(TRAIL_LEN);
+let   trailHead  = 0;
+let   trailFull  = false;
+
+function clampToCircle(r, p, maxA) {
+  const m = Math.hypot(r, p);
+  if (m <= maxA || m === 0) return [r, p];
+  const s = maxA / m;
+  return [r * s, p * s];
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Juice: particles + floating popups, both in plot degree-space so they
+// scale with the canvas (fullscreen mode included). Confetti also lives in
+// degree-space and falls under gravity.
+// ───────────────────────────────────────────────────────────────────────────
+const particles = [];   // {x,y,vx,vy,age,life,size,color,gravity}
+const popups    = [];   // {text,x,y,age,life,sizePx,color}
+
+function spawnBurst(xDeg, yDeg, rDeg, color, n = 14, inward = true) {
+  for (let i = 0; i < n; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const px = xDeg + Math.cos(ang) * rDeg;
+    const py = yDeg + Math.sin(ang) * rDeg;
+    const speed = (inward ? -1 : 1) * rDeg * (1.2 + Math.random() * 1.2);
+    particles.push({
+      x: px, y: py,
+      vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed,
+      age: 0, life: 0.45 + Math.random() * 0.3,
+      size: 2 + Math.random() * 2, color, gravity: 0,
+    });
+  }
+}
+function spawnConfetti() {
+  const colors = ['#4ade80', '#fbbf24', '#60a5fa', '#f472b6', '#7dd3fc'];
+  for (let i = 0; i < 80; i++) {
+    particles.push({
+      x: (Math.random() * 2 - 1) * maxAngle * 0.9,
+      y: maxAngle * (1.0 + Math.random() * 0.5),
+      vx: (Math.random() * 2 - 1) * 4,
+      vy: -(6 + Math.random() * 10),
+      age: 0, life: 3 + Math.random() * 1.5,
+      size: 3 + Math.random() * 3,
+      color: colors[i % colors.length], gravity: -14,
+    });
+  }
+}
+function spawnPopup(text, xDeg, yDeg, color = '#f5f5f7', sizePx = 13) {
+  popups.push({ text, x: xDeg, y: yDeg, age: 0, life: 1.3, sizePx, color });
+}
+function updateFx(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.age += dt;
+    if (p.age >= p.life) { particles.splice(i, 1); continue; }
+    p.vy += p.gravity * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+  }
+  for (let i = popups.length - 1; i >= 0; i--) {
+    const u = popups[i];
+    u.age += dt;
+    if (u.age >= u.life) { popups.splice(i, 1); continue; }
+    u.y += 2.2 * dt; // drift upward in plot space
+  }
+}
+
+let lastDrawTs = performance.now();
+
+function drawTiltPlot(roll, pitch) {
+  const W = tiltCanvas.width, H = tiltCanvas.height;
+  const cx = W / 2, cy = H / 2;
+  const radius = Math.min(W, H) / 2 - 32;
+  const scale  = radius / maxAngle;
+  const k      = W / 460;                 // HUD scale factor (fullscreen)
+  const F = (px, w = 600, disp = false) =>
+    `${w} ${Math.max(8, Math.round(px * k))}px ${disp ? 'Outfit, sans-serif' : 'IBM Plex Mono, monospace'}`;
+
+  const nowTs = performance.now();
+  const dtDraw = Math.min(0.05, (nowTs - lastDrawTs) / 1000);
+  lastDrawTs = nowTs;
+
+  // Animate the displayed ring toward the logic ring (shrinks contract,
+  // grows breathe — nothing snaps), decay the shrink flash, update fx.
+  if (gameState.displayRadius <= 0) gameState.displayRadius = gameState.effRadius;
+  gameState.displayRadius += (gameState.effRadius - gameState.displayRadius) * Math.min(1, dtDraw * 9);
+  if (gameState.flashT > 0) gameState.flashT = Math.max(0, gameState.flashT - dtDraw);
+  updateFx(dtDraw);
+
+  // Single drawImage replaces the ~25 ring/label/crosshair/border ops that
+  // used to run every frame.
+  tiltCtx.clearRect(0, 0, W, H);
+  tiltCtx.drawImage(staticCanvas, 0, 0);
+
+  tiltCtx.save();
+  tiltCtx.beginPath(); tiltCtx.arc(cx, cy, radius, 0, Math.PI * 2); tiltCtx.clip();
+
+  const gp   = gameState.phase;
+  const mode = GAME_MODES[gameState.mode] || GAME_MODES[DEFAULT_MODE];
+
+  // ── Game target (ring or pop target) ────────────────────────────────────
+  if (gp !== 'idle' && mode.kind !== 'pop') {
+    const tcx = cx + gameState.targetX * scale;
+    const tcy = cy - gameState.targetY * scale;
+    const ringPx = gameState.displayRadius * scale;
+    if (ringPx > 1 && ringPx < radius * 1.6) {
+      if (gp === 'countdown' || gp === 'rest' || (gp === 'done' && !celebration.active)) {
+        tiltCtx.beginPath();
+        tiltCtx.arc(tcx, tcy, ringPx, 0, Math.PI * 2);
+        tiltCtx.fillStyle   = 'rgba(245,245,247,0.04)';
+        tiltCtx.fill();
+        tiltCtx.strokeStyle = 'rgba(245,245,247,0.35)';
+        tiltCtx.lineWidth = 2;
+        tiltCtx.setLineDash([6, 6]);
+        tiltCtx.stroke();
+        tiltCtx.setLineDash([]);
+      } else if (gp === 'playing') {
+        // Pulse the ring during the final second before a shrink step so the
+        // tighten never feels random — the player sees it coming.
+        const nearShrink = gameState.inside && gameState.shrinkEnabled &&
+                           gameState.insideStreakMs >= (gameState.shrinkHoldS - 1) * 1000;
+        const pulse = nearShrink ? 1.2 * (0.5 + 0.5 * Math.sin(nowTs / 70)) : 0;
+        const flash = gameState.flashT > 0 ? gameState.flashT / 0.25 : 0;
+        tiltCtx.beginPath();
+        tiltCtx.arc(tcx, tcy, ringPx, 0, Math.PI * 2);
+        tiltCtx.fillStyle   = gameState.inside ? `rgba(74,222,128,${0.10 + 0.12 * flash})`
+                                               : 'rgba(248,113,113,0.07)';
+        tiltCtx.fill();
+        tiltCtx.strokeStyle = flash > 0.2 ? 'rgba(245,245,247,0.95)'
+                            : (gameState.inside ? 'rgba(74,222,128,0.90)'
+                                                : 'rgba(248,113,113,0.80)');
+        tiltCtx.lineWidth = 2.5 + pulse + 2 * flash;
+        tiltCtx.stroke();
+
+        // Hold-progress arc: fraction of the hold completed, drawn clockwise
+        // from 12 o'clock in brighter green on top of the ring.
+        if (gameState.inside && gameState.shrinkEnabled && gameState.insideStreakMs > 0) {
+          const frac = Math.min(1, gameState.insideStreakMs / (gameState.shrinkHoldS * 1000));
+          tiltCtx.beginPath();
+          tiltCtx.arc(tcx, tcy, ringPx, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
+          tiltCtx.strokeStyle = 'rgba(74,222,128,1)';
+          tiltCtx.lineWidth = 4 + pulse;
+          tiltCtx.lineCap = 'round';
+          tiltCtx.stroke();
+          tiltCtx.lineCap = 'butt';
+        }
+
+        // Rank band label at the top of the ring — degrees mean nothing to a
+        // member; "GOLD" does.
+        const rIdx = rankForRing(gameState.currentRadius);
+        tiltCtx.font = F(10, 600);
+        tiltCtx.fillStyle = RANKS[rIdx].color;
+        tiltCtx.textAlign = 'center';
+        tiltCtx.fillText(RANKS[rIdx].name, tcx, tcy - ringPx + 16 * k);
+      }
+    }
+  }
+
+  // Pop-target mode: a single target circle to lean into and hold.
+  if (gp === 'playing' && mode.kind === 'pop') {
+    const p = gameState.pop;
+    const px = cx + p.x * scale, py = cy - p.y * scale, pr = p.r * scale;
+    tiltCtx.beginPath();
+    tiltCtx.arc(px, py, pr, 0, Math.PI * 2);
+    tiltCtx.fillStyle   = gameState.inside ? 'rgba(74,222,128,0.14)' : 'rgba(96,165,250,0.10)';
+    tiltCtx.fill();
+    tiltCtx.strokeStyle = gameState.inside ? 'rgba(74,222,128,0.95)' : 'rgba(96,165,250,0.85)';
+    tiltCtx.lineWidth = 2.5;
+    tiltCtx.stroke();
+    if (p.holdMs > 0) {
+      const frac = Math.min(1, p.holdMs / (POP_HOLD_S * 1000));
+      tiltCtx.beginPath();
+      tiltCtx.arc(px, py, pr, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
+      tiltCtx.strokeStyle = 'rgba(74,222,128,1)';
+      tiltCtx.lineWidth = 4.5;
+      tiltCtx.lineCap = 'round';
+      tiltCtx.stroke();
+      tiltCtx.lineCap = 'butt';
+    }
+  }
+
+  // Sway ellipse drawing intentionally removed — visually confusing next to
+  // the green target ring. The area metric (Advanced → Session metrics →
+  // Sway area) still uses computeSwayEllipse().
+
+  const N = trailFull ? TRAIL_LEN : trailHead;
+  if (N > 1) {
+    const BANDS = 8, bandSize = Math.ceil((N - 1) / BANDS);
+    for (let b = 0; b < BANDS; b++) {
+      const s = b * bandSize, e = Math.min(s + bandSize, N - 1);
+      if (s >= e) break;
+      const t = (s + e) / 2 / Math.max(N - 2, 1);
+      tiltCtx.beginPath();
+      const i0 = trailFull ? (trailHead + s) % TRAIL_LEN : s;
+      const [r0, p0] = clampToCircle(trailRoll[i0], trailPitch[i0], maxAngle);
+      tiltCtx.moveTo(cx + r0 * scale, cy - p0 * scale);
+      for (let i = s + 1; i <= e; i++) {
+        const idx = trailFull ? (trailHead + i) % TRAIL_LEN : i;
+        const [rc, pc] = clampToCircle(trailRoll[idx], trailPitch[idx], maxAngle);
+        tiltCtx.lineTo(cx + rc * scale, cy - pc * scale);
+      }
+      tiltCtx.strokeStyle = `rgba(148,163,184,${(0.10 + 0.62 * t).toFixed(2)})`;
+      tiltCtx.lineWidth   = 0.8 + 1.4 * t;
+      tiltCtx.lineJoin = tiltCtx.lineCap = 'round';
+      tiltCtx.stroke();
+    }
+  }
+
+  // Particles (shrink bursts, pops, confetti).
+  for (const p of particles) {
+    const a = 1 - p.age / p.life;
+    tiltCtx.globalAlpha = Math.max(0, a);
+    tiltCtx.fillStyle = p.color;
+    const ppx = cx + p.x * scale, ppy = cy - p.y * scale;
+    tiltCtx.fillRect(ppx - p.size / 2, ppy - p.size / 2, p.size, p.size);
+  }
+  tiltCtx.globalAlpha = 1;
+
+  const [cr, cp] = clampToCircle(roll, pitch, maxAngle);
+  const dx = cx + cr * scale, dy = cy - cp * scale;
+  const dotOut = gameState.phase === 'playing' && !gameState.inside;
+  const dotColor = dotOut ? '#f87171' : '#4ade80';
+  const dotHalo  = dotOut ? 'rgba(248,113,113,0.14)' : 'rgba(74,222,128,0.12)';
+  tiltCtx.beginPath(); tiltCtx.arc(dx, dy, 14, 0, Math.PI * 2);
+  tiltCtx.fillStyle = dotHalo; tiltCtx.fill();
+  tiltCtx.beginPath(); tiltCtx.arc(dx, dy, 6, 0, Math.PI * 2);
+  tiltCtx.fillStyle = dotColor;
+  tiltCtx.shadowColor = dotColor; tiltCtx.shadowBlur = 12;
+  tiltCtx.fill(); tiltCtx.shadowBlur = 0;
+
+  // Floating popups (on top of everything inside the arena).
+  for (const u of popups) {
+    const a = u.age < 0.15 ? u.age / 0.15 : 1 - Math.max(0, (u.age - 0.6) / (u.life - 0.6));
+    tiltCtx.globalAlpha = Math.max(0, Math.min(1, a));
+    tiltCtx.font = F(u.sizePx, 600);
+    tiltCtx.fillStyle = u.color;
+    tiltCtx.textAlign = 'center';
+    tiltCtx.fillText(u.text, cx + u.x * scale, cy - u.y * scale);
+  }
+  tiltCtx.globalAlpha = 1;
+  tiltCtx.restore();
+
+  // ── HUD — phase-aware overlay drawn on the canvas ───────────────────────
+  if (gameState.phase === 'idle') {
+    if (!instrumentSkin()) drawIdleOverlay(W, H, cx, cy, radius, k, F, nowTs);
+  } else {
+    const now    = Date.now();
+    const phaseS = gameState.phaseStartMs > 0 ? (now - gameState.phaseStartMs) / 1000 : 0;
+
+    if (gameState.phase === 'tutorial') {
+      const msgs = [
+        ['LEAN SLOWLY',                  'the green dot follows you'],
+        ['NOW BACK TO THE CENTER',       'bring the dot to the middle'],
+        ['STAY INSIDE THE RING TO SCORE','it tightens as you improve'],
+      ];
+      const [main, sub] = msgs[Math.min(tut.step, 2)];
+      if (tut.step === 2) {
+        // Preview the actual starting ring in green.
+        const rPx = gameState.displayRadius * scale;
+        tiltCtx.beginPath(); tiltCtx.arc(cx, cy, rPx, 0, Math.PI * 2);
+        tiltCtx.fillStyle = 'rgba(74,222,128,0.08)'; tiltCtx.fill();
+        tiltCtx.strokeStyle = 'rgba(74,222,128,0.9)'; tiltCtx.lineWidth = 2.5;
+        tiltCtx.stroke();
+      }
+      tiltCtx.textAlign = 'center';
+      tiltCtx.font = F(16, 800, true);
+      tiltCtx.fillStyle = 'rgba(245,245,247,0.95)';
+      tiltCtx.fillText(main, cx, 40 * k);
+      tiltCtx.font = F(11, 600, true);
+      tiltCtx.fillStyle = 'rgba(245,245,247,0.55)';
+      tiltCtx.fillText(sub.toUpperCase(), cx, 58 * k);
+      for (let i = 0; i < 3; i++) {            // step progress dots
+        tiltCtx.beginPath();
+        tiltCtx.arc(cx + (i - 1) * 16 * k, H - 38 * k, 3.5 * k, 0, Math.PI * 2);
+        tiltCtx.fillStyle = i <= tut.step ? 'rgba(74,222,128,0.9)'
+                                          : 'rgba(245,245,247,0.25)';
+        tiltCtx.fill();
+      }
+      tiltCtx.font = F(10, 600, true);
+      tiltCtx.fillStyle = 'rgba(245,245,247,0.4)';
+      tiltCtx.fillText('TAP TO SKIP', cx, H - 18 * k);
+    } else if (gameState.phase === 'countdown') {
+      const n = Math.max(1, Math.ceil(COUNTDOWN_S - phaseS));
+      tiltCtx.font = F(96);
+      tiltCtx.fillStyle = 'rgba(245,245,247,0.92)';
+      tiltCtx.textAlign = 'center';
+      tiltCtx.fillText(String(n), cx, cy - 30 * k);
+      tiltCtx.font = F(13, 600, true);
+      tiltCtx.fillStyle = 'rgba(245,245,247,0.5)';
+      tiltCtx.fillText(`ROUND ${gameState.roundIndex + 1} OF ${mode.rounds} — GET STEADY`, cx, cy + 14 * k);
+    } else if (gameState.phase === 'rest') {
+      const remaining = Math.max(0, mode.restS - phaseS);
+      tiltCtx.font = F(40, 700, true);
+      tiltCtx.fillStyle = 'rgba(96,165,250,0.95)';
+      tiltCtx.textAlign = 'center';
+      tiltCtx.fillText('REST', cx, cy - 36 * k);
+      tiltCtx.font = F(30);
+      tiltCtx.fillStyle = 'rgba(245,245,247,0.9)';
+      tiltCtx.fillText(`0:${String(Math.ceil(remaining)).padStart(2, '0')}`, cx, cy + 4 * k);
+      if (gameState.restMessage) {
+        tiltCtx.font = F(13, 600, true);
+        tiltCtx.fillStyle = 'rgba(74,222,128,0.85)';
+        tiltCtx.fillText(gameState.restMessage, cx, cy + 34 * k);
+      }
+      tiltCtx.font = F(11, 600, true);
+      tiltCtx.fillStyle = 'rgba(245,245,247,0.45)';
+      tiltCtx.fillText(`NEXT: ROUND ${gameState.roundIndex + 2} OF ${mode.rounds}`, cx, cy + 56 * k);
+    } else if (gameState.phase === 'done' && celebration.active) {
+      drawCelebration(W, H, cx, cy, radius, k, F);
+    } else {
+      // playing — time top-left, score top-right.
+      const remainingS = gameState.phase === 'playing'
+        ? Math.max(0, mode.roundS - phaseS) : 0;
+      const tMin = Math.floor(remainingS / 60);
+      const tSec = Math.floor(remainingS % 60);
+      tiltCtx.font = F(30);
+      tiltCtx.fillStyle = 'rgba(245,245,247,0.95)';
+      tiltCtx.textAlign = 'left';
+      tiltCtx.fillText(`${tMin}:${String(tSec).padStart(2, '0')}`, 18 * k, 36 * k);
+
+      tiltCtx.fillStyle = gameState.phase === 'playing'
+        ? 'rgba(74,222,128,0.95)'
+        : 'rgba(245,245,247,0.95)';
+      tiltCtx.textAlign = 'right';
+      tiltCtx.fillText(Math.round(gameState.score).toLocaleString(), W - 18 * k, 36 * k);
+
+      tiltCtx.font = F(10, 600, true);
+      tiltCtx.fillStyle = 'rgba(245,245,247,0.45)';
+      tiltCtx.textAlign = 'left';
+      tiltCtx.fillText('TIME', 18 * k, 50 * k);
+      tiltCtx.textAlign = 'right';
+      tiltCtx.fillText('SCORE', W - 18 * k, 50 * k);
+
+      if (gameState.phase === 'playing' && mode.rounds > 1) {
+        tiltCtx.font = F(11, 600, true);
+        tiltCtx.fillStyle = 'rgba(245,245,247,0.5)';
+        tiltCtx.textAlign = 'center';
+        tiltCtx.fillText(`ROUND ${gameState.roundIndex + 1}/${mode.rounds}`, cx, 28 * k);
+      }
+
+      // ── Live ladder — your name climbing the board in real time ─────────
+      if (gameState.phase === 'playing' && gameState.liveBoard.length) {
+        const meName = isGuest() ? 'YOU' : players.current.slice(0, 8);
+        const me = { i: meName, score: Math.round(gameState.score), me: true };
+        const merged = [];
+        let inserted = false;
+        for (const e of gameState.liveBoard) {
+          if (!inserted && me.score >= e.score) { merged.push(me); inserted = true; }
+          merged.push(e);
+        }
+        if (!inserted) merged.push(me);
+        const meIdx = merged.indexOf(me);
+        const start = clamp(meIdx - 2, 0, Math.max(0, merged.length - 5));
+        const end = Math.min(merged.length, start + 5);
+        tiltCtx.textAlign = 'right';
+        let ly = 72 * k;
+        for (let i = start; i < end; i++) {
+          const e = merged[i];
+          tiltCtx.font = F(9.5, e.me ? 700 : 500, !!e.me);
+          tiltCtx.fillStyle = e.me ? 'rgba(74,222,128,0.95)'
+                            : (i === meIdx - 1 ? 'rgba(251,191,36,0.8)'   // next to beat
+                                               : 'rgba(245,245,247,0.42)');
+          tiltCtx.fillText(`#${i + 1} ${e.i}  ${e.score.toLocaleString()}`, W - 18 * k, ly);
+          ly += 14 * k;
+        }
+      }
+
+      // Warm-up indicator + calm-mode breathing pacer.
+      if (gameState.phase === 'playing' && gameState.warmup) {
+        tiltCtx.font = F(11, 600, true);
+        tiltCtx.fillStyle = 'rgba(251,191,36,0.85)';
+        tiltCtx.textAlign = 'center';
+        tiltCtx.fillText('WARM-UP — FIND YOUR BALANCE', cx, H - 24 * k);
+      } else if (gameState.phase === 'playing' && mode.kind === 'calm') {
+        tiltCtx.font = F(14, 700, true);
+        tiltCtx.fillStyle = 'rgba(96,165,250,0.9)';
+        tiltCtx.textAlign = 'center';
+        tiltCtx.fillText(gameState.breatheIn ? 'BREATHE IN' : 'BREATHE OUT', cx, H - 24 * k);
+      }
+    }
+  }
+}
+
+// Idle "attract" screen (game skin only). Disconnected: a friendly connect
+// gate. Connected: rank + streak centred large, pulsing accent rings, a
+// breathing PRESS PLAY prompt, sparkline + arcade leaderboard at the edges.
+// The live dot keeps moving underneath for free practice.
+function drawIdleOverlay(W, H, cx, cy, radius, k, F, nowTs) {
+  const info = idleInfo;
+  const accent = selectedAccent();
+
+  // Slow pulsing accent rings.
+  for (let i = 0; i < 2; i++) {
+    const ph = (nowTs / 1000 / 3 + i * 0.5) % 1;          // 3 s cycle, offset
+    const pr = radius * (0.25 + 0.65 * ph);
+    tiltCtx.beginPath(); tiltCtx.arc(cx, cy, pr, 0, Math.PI * 2);
+    tiltCtx.strokeStyle = hexA(accent, 0.16 * (1 - ph));
+    tiltCtx.lineWidth = 1.5;
+    tiltCtx.stroke();
+  }
+
+  tiltCtx.textAlign = 'center';
+  tiltCtx.font = F(17, 800, true);
+  tiltCtx.fillStyle = 'rgba(245,245,247,0.6)';
+  tiltCtx.fillText('FERRA BALANCE', cx, 30 * k);
+
+  if (!connected) {
+    tiltCtx.font = F(19, 700, true);
+    tiltCtx.fillStyle = 'rgba(245,245,247,0.92)';
+    tiltCtx.fillText('CONNECT YOUR PLATE', cx, cy - 8 * k);
+    tiltCtx.font = F(12, 500, true);
+    tiltCtx.fillStyle = 'rgba(245,245,247,0.5)';
+    tiltCtx.fillText('press the green button below', cx, cy + 16 * k);
+    return;
+  }
+
+  // Identity, centred: Guest banner, or rank + player name, or a first-game
+  // greeting for a fresh profile.
+  if (isGuest()) {
+    tiltCtx.font = F(24, 800, true);
+    tiltCtx.fillStyle = 'rgba(245,245,247,0.88)';
+    tiltCtx.fillText('GUEST', cx, cy - 14 * k);
+    tiltCtx.font = F(10, 600, true);
+    tiltCtx.fillStyle = 'rgba(245,245,247,0.45)';
+    tiltCtx.fillText('PROGRESS NOT SAVED', cx, cy + 4 * k);
+  } else if (info && info.rankIdx != null) {
+    tiltCtx.font = F(26, 800, true);
+    tiltCtx.fillStyle = RANKS[info.rankIdx].color;
+    tiltCtx.fillText(RANKS[info.rankIdx].name, cx, cy - 16 * k);
+    tiltCtx.font = F(10, 600, true);
+    tiltCtx.fillStyle = 'rgba(245,245,247,0.45)';
+    tiltCtx.fillText(players.current, cx, cy + 1 * k);
+  } else {
+    tiltCtx.font = F(22, 800, true);
+    tiltCtx.fillStyle = 'rgba(245,245,247,0.88)';
+    tiltCtx.fillText(players.current, cx, cy - 14 * k);
+    tiltCtx.font = F(10, 600, true);
+    tiltCtx.fillStyle = 'rgba(245,245,247,0.45)';
+    tiltCtx.fillText('FIRST GAME — GOOD LUCK', cx, cy + 4 * k);
+  }
+  if (info && info.streak >= 2) {
+    tiltCtx.font = F(13, 700, true);
+    tiltCtx.fillStyle = 'rgba(251,191,36,0.9)';
+    tiltCtx.fillText(`🔥 ${info.streak}-DAY STREAK`, cx, cy + 24 * k);
+  }
+
+  // Breathing PRESS PLAY prompt.
+  const breathe = 0.55 + 0.35 * Math.sin(nowTs / 450);
+  tiltCtx.font = F(13, 700, true);
+  tiltCtx.fillStyle = `rgba(74,222,128,${breathe.toFixed(2)})`;
+  tiltCtx.fillText('PRESS PLAY', cx, H - 18 * k);
+
+  // Best-ring trend sparkline (last 10 sessions, smaller = higher).
+  if (info && info.spark && info.spark.length >= 2) {
+    const sw = 92 * k, sh = 20 * k, sx = 22 * k, sy = H - 30 * k;
+    const vals = info.spark;
+    const mn = Math.min(...vals), mx = Math.max(...vals);
+    tiltCtx.beginPath();
+    vals.forEach((v, i) => {
+      const x = sx + (i / (vals.length - 1)) * sw;
+      const y = sy - (mx === mn ? 0.5 : (mx - v) / (mx - mn)) * sh;
+      i === 0 ? tiltCtx.moveTo(x, y) : tiltCtx.lineTo(x, y);
+    });
+    tiltCtx.strokeStyle = 'rgba(74,222,128,0.7)';
+    tiltCtx.lineWidth = 1.5;
+    tiltCtx.stroke();
+    tiltCtx.font = F(9, 600, true);
+    tiltCtx.fillStyle = 'rgba(245,245,247,0.4)';
+    tiltCtx.textAlign = 'left';
+    tiltCtx.fillText(`best ±${info.best.toFixed(1)}cm`, sx, sy - sh - 6 * k);
+  }
+
+  // Arcade leaderboard panel, top-right — the board for the SELECTED game.
+  if (info && info.lb && info.lb.length) {
+    const curMode = GAME_MODES[$('g-mode').value] ? $('g-mode').value : DEFAULT_MODE;
+    const board = (dailyActive
+      ? info.lb.filter(e => e.d === todayKey())
+      : info.lb.filter(e => !e.d && lbModeOf(e) === curMode && lbStanceOf(e) === stance)
+    ).slice(0, 5);
+    if (board.length) {
+      const card = MODE_CARDS.find(c => c.kind === GAME_MODES[curMode].kind);
+      tiltCtx.textAlign = 'right';
+      tiltCtx.font = F(9, 700, true);
+      tiltCtx.fillStyle = 'rgba(245,245,247,0.45)';
+      tiltCtx.fillText(dailyActive ? 'TOP — DAILY CHALLENGE'
+                                   : `TOP — ${(card ? card.name : 'SCORES').toUpperCase()}`,
+                       W - 22 * k, 66 * k);
+      tiltCtx.font = F(10, 500);
+      board.forEach((e, i) => {
+        tiltCtx.fillStyle = i === 0 ? 'rgba(251,191,36,0.9)' : 'rgba(245,245,247,0.55)';
+        tiltCtx.fillText(`${e.i}  ${e.score.toLocaleString()}`, W - 22 * k, (80 + i * 13) * k);
+      });
+    }
+  }
+}
+
+function hexA(hex, a) {
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${a.toFixed(3)})`;
+}
+
+// End-of-game celebration: scrim, rank stamp, score count-up, per-round
+// stars, new-best confetti. The clinician detail row stays below the canvas.
+function drawCelebration(W, H, cx, cy, radius, k, F) {
+  const t = (performance.now() - celebration.t0) / 1000;
+  tiltCtx.save();
+  tiltCtx.beginPath(); tiltCtx.arc(cx, cy, radius, 0, Math.PI * 2); tiltCtx.clip();
+  tiltCtx.fillStyle = 'rgba(15,15,18,0.72)';
+  tiltCtx.fillRect(0, 0, W, H);
+  tiltCtx.restore();
+
+  tiltCtx.textAlign = 'center';
+  tiltCtx.font = F(12, 600, true);
+  tiltCtx.fillStyle = 'rgba(245,245,247,0.5)';
+  tiltCtx.fillText('GAME COMPLETE', cx, cy - 86 * k);
+
+  // Rank stamp scales in.
+  const stampK = Math.min(1, t / 0.35);
+  const ease = 1 - Math.pow(1 - stampK, 3);
+  tiltCtx.font = `800 ${Math.round(34 * k * (0.6 + 0.4 * ease))}px Outfit, sans-serif`;
+  tiltCtx.fillStyle = RANKS[celebration.rankIdx].color;
+  tiltCtx.fillText(RANKS[celebration.rankIdx].name, cx, cy - 48 * k);
+
+  // Score counts up over 1.5 s.
+  const cu = Math.min(1, Math.max(0, (t - 0.2) / 1.5));
+  const shown = Math.round(celebration.score * (1 - Math.pow(1 - cu, 3)));
+  tiltCtx.font = F(44);
+  tiltCtx.fillStyle = 'rgba(245,245,247,0.96)';
+  tiltCtx.fillText(shown.toLocaleString(), cx, cy + 4 * k);
+  tiltCtx.font = F(10, 600, true);
+  tiltCtx.fillStyle = 'rgba(245,245,247,0.45)';
+  tiltCtx.fillText('SCORE', cx, cy + 20 * k);
+
+  // Per-round stars.
+  if (celebration.stars.length) {
+    tiltCtx.font = F(18);
+    const groups = celebration.stars.map(s => '★'.repeat(s) + '☆'.repeat(3 - s));
+    tiltCtx.fillStyle = 'rgba(251,191,36,0.95)';
+    tiltCtx.fillText(groups.join('   '), cx, cy + 48 * k);
+  }
+
+  tiltCtx.font = F(12, 600, true);
+  tiltCtx.fillStyle = 'rgba(245,245,247,0.6)';
+  tiltCtx.fillText(celebration.subline, cx, cy + 72 * k);
+
+  if (celebration.newBest) {
+    const blink = 0.7 + 0.3 * Math.sin(performance.now() / 200);
+    tiltCtx.font = F(15, 800, true);
+    tiltCtx.fillStyle = `rgba(251,191,36,${blink})`;
+    tiltCtx.fillText('★ NEW BEST ★', cx, cy + 96 * k);
+  }
+}
+
+// Fullscreen game mode — the arena card fills the screen and the canvas
+// re-renders at higher resolution so it stays crisp.
+// requestFullscreen() reports failure as a PROMISE REJECTION, so it must be
+// awaited — otherwise refusals (mid-transition clicks, consumed activation,
+// browser-level F11 fullscreen) fail silently and the button "does nothing".
+const tiltCard = tiltCanvas.closest ? tiltCanvas.closest('.card') : null;
+async function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement) { await document.exitFullscreen(); return; }
+    const el = tiltCard || document.documentElement;
+    await el.requestFullscreen();
+  } catch (e) {
+    log('Fullscreen refused (' + (e && e.message ? e.message : e) + ') — retrying on page…', 'warn');
+    try {
+      await new Promise(r => setTimeout(r, 80));   // let any transition settle
+      await document.documentElement.requestFullscreen();
+    } catch (e2) {
+      log('Fullscreen blocked: ' + (e2 && e2.message ? e2.message : e2) +
+          '. If the browser is in F11 fullscreen, press F11 first.', 'err');
+    }
+  }
+}
+$('btn-fs').addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', () => {
+  const fs = !!document.fullscreenElement;
+  const size = fs ? 760 : 460;
+  tiltCanvas.width = tiltCanvas.height = size;
+  staticCanvas.width = staticCanvas.height = size;
+  rebuildStaticBackground();
+  $('btn-fs').textContent = fs ? '✕' : '⛶';
+  drawTiltPlot(lastRoll, lastPitch);
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Session-wide Welford accumulator for mean + 2×2 covariance, used both for
+// the sway-area ellipse and as the "stop accumulating on Stop" mechanism.
+// ───────────────────────────────────────────────────────────────────────────
+let swayN = 0, swayMx = 0, swayMy = 0;
+let swayCxx = 0, swayCyy = 0, swayCxy = 0;
+let swayFrozen = false;
+
+function swayAccumulate(roll, pitch) {
+  swayN++;
+  const dx  = roll  - swayMx;
+  const dy  = pitch - swayMy;
+  swayMx   += dx / swayN;
+  swayMy   += dy / swayN;
+  const dx2 = roll  - swayMx;
+  const dy2 = pitch - swayMy;
+  swayCxx  += dx * dx2;
+  swayCyy  += dy * dy2;
+  swayCxy  += dx * dy2;
+}
+function resetSwayAccumulator() {
+  swayN = 0; swayMx = 0; swayMy = 0;
+  swayCxx = 0; swayCyy = 0; swayCxy = 0;
+}
+
+// 70 % prediction ellipse (chi² critical = 2.408 for p = 0.70).
+function computeSwayEllipse() {
+  if (swayN < 5) return null;
+  const cxx = swayCxx / (swayN - 1);
+  const cyy = swayCyy / (swayN - 1);
+  const cxy = swayCxy / (swayN - 1);
+  const trace = cxx + cyy;
+  const det   = cxx * cyy - cxy * cxy;
+  const disc  = Math.sqrt(Math.max(0, (trace / 2) ** 2 - det));
+  const lam1  = trace / 2 + disc, lam2 = trace / 2 - disc;
+  const k     = Math.sqrt(2.408);
+  const semiA = Math.sqrt(Math.max(0, lam1)) * k;
+  const semiB = Math.sqrt(Math.max(0, lam2)) * k;
+  const angle = Math.atan2(2 * cxy, cxx - cyy) / 2;
+  return { cx: swayMx, cy: swayMy, semiA, semiB, angle, area: Math.PI * semiA * semiB };
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Local persistence — session history, leaderboard, preferences. This is a
+// plain GitHub-Pages page, so localStorage is the right tool: nothing leaves
+// the device, and gym tablets keep their own history per browser profile.
+// ───────────────────────────────────────────────────────────────────────────
+const HISTORY_KEY = 'bb_game_history_v1';   // per-player: HISTORY_KEY + '::' + name
+const PREFS_KEY   = 'bb_prefs_v1';          // { sound, mode } — shared across players
+const LB_KEY      = 'bb_leaderboard_v1';    // arcade top-10 [{i,score,s,t}] — shared
+const PLAYERS_KEY = 'bb_players_v1';        // { current, names[] }
+
+// ── Player profiles + Guest ────────────────────────────────────────────────
+// Each named player gets their own history (→ own rank, streak, sparkline,
+// personalised starting ring). GUEST is a built-in profile that reads and
+// writes nothing: defaults every game, history untouched. The leaderboard
+// stays shared — it's the arcade board for the whole board/household.
+const GUEST = 'GUEST';
+let players = { current: 'PLAYER 1', names: ['PLAYER 1'] };
+
+function loadPlayersStore() {
+  try {
+    const p = JSON.parse(localStorage.getItem(PLAYERS_KEY));
+    if (p && p.current && Array.isArray(p.names) && p.names.length) return p;
+  } catch {}
+  return null;
+}
+function savePlayersStore() {
+  try { localStorage.setItem(PLAYERS_KEY, JSON.stringify(players)); } catch {}
+}
+function isGuest()    { return players.current === GUEST; }
+function historyKey() { return HISTORY_KEY + '::' + players.current; }
+
+function setPlayer(name) {
+  if (recording || $('g-mode').disabled) return;   // not mid-game
+  players.current = name;
+  if (name !== GUEST && !players.names.includes(name)) players.names.push(name);
+  savePlayersStore();
+  $('player-name').textContent = name === GUEST ? 'GUEST' : name;
+  updateHistorySummary();          // refreshes rank/streak/sparkline + idleInfo
+  refreshStatus();
+  drawTiltPlot(lastRoll, lastPitch);
+  log(`Player: ${name === GUEST ? 'Guest (progress not saved)' : name}`);
+}
+
+function hidePlayerMenu() { const m = $('player-menu'); if (m) m.style.display = 'none'; }
+function renderPlayerMenu() {
+  const m = $('player-menu');
+  if (!m) return;
+  m.innerHTML = '';
+  const mk = (label, cls, fn) => {
+    const d = document.createElement('div');
+    d.className = 'pm-item' + (cls ? ' ' + cls : '');
+    d.textContent = label;
+    d.addEventListener('click', fn);
+    m.appendChild(d);
+  };
+  for (const n of players.names) {
+    mk((n === players.current ? '✓ ' : '') + n,
+       n === players.current ? 'sel' : '',
+       () => { setPlayer(n); hidePlayerMenu(); });
+  }
+  mk((isGuest() ? '✓ ' : '') + 'Guest — don\u2019t save', isGuest() ? 'sel' : '',
+     () => { setPlayer(GUEST); hidePlayerMenu(); });
+  mk('+ Add player', 'add', () => {
+    hidePlayerMenu();
+    const raw = (typeof window !== 'undefined' && window.prompt)
+      ? window.prompt('Player name?') : null;
+    if (!raw) return;
+    const name = raw.trim().toUpperCase().slice(0, 12);
+    if (!name || name === GUEST) return;
+    setPlayer(name);
+  });
+}
+$('btn-player').addEventListener('click', (ev) => {
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  const m = $('player-menu');
+  if (m.style.display === 'none') { renderPlayerMenu(); m.style.display = ''; }
+  else hidePlayerMenu();
+});
+document.addEventListener('click', hidePlayerMenu);
+
+function loadHistory() {
+  if (isGuest()) return [];
+  try { return JSON.parse(localStorage.getItem(historyKey())) || []; }
+  catch { return []; }
+}
+function saveHistoryEntry(entry) {
+  if (isGuest()) { updateHistorySummary(); return; }   // Guest leaves no trace
+  const h = loadHistory();
+  h.push(entry);
+  while (h.length > 30) h.shift();
+  try { localStorage.setItem(historyKey(), JSON.stringify(h)); } catch {}
+  updateHistorySummary();
+}
+function loadPrefs() {
+  try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; }
+  catch { return {}; }
+}
+function savePrefs() {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(
+      { sound: soundOn, mode: $('g-mode').value, stance, daily: dailyActive }));
+  } catch {}
+}
+// ── Cloud leaderboard — Firebase RTDB (motherofdashboard) at /ferraBalance ──
+// REST + anonymous auth keeps this single-file (no SDK). Every score is also
+// POSTed to the shared gym database, and loadLB() merges cloud + local so all
+// devices see one board. If anonymous auth or the /ferraBalance rules aren't
+// enabled yet, everything silently falls back to the local board.
+const FB_DB     = 'https://motherofdashboard-default-rtdb.asia-southeast1.firebasedatabase.app';
+const FB_KEY    = 'AIzaSyC5mZAG98VAeDpp1IssYYQ2kcKeClyqIGc';
+const FB_PATH   = '/ferraBalance/v1/plateLb';   // separate board from the IMU wobble board (different physics)
+const FB_RT_KEY = 'bb_fb_refresh_v1';        // anonymous-user refresh token
+
+let cloudLB = [];          // latest fetched global entries
+let cloudOK = false;       // true once a fetch succeeds
+let fbToken = null, fbTokenExp = 0;
+
+async function fbAuthToken() {
+  if (fbToken && Date.now() < fbTokenExp - 60000) return fbToken;
+  try {
+    // Reuse the same anonymous user across sessions via its refresh token.
+    const rt = localStorage.getItem(FB_RT_KEY);
+    if (rt) {
+      const r = await fetch('https://securetoken.googleapis.com/v1/token?key=' + FB_KEY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(rt),
+      });
+      if (r.ok) {
+        const j = await r.json();
+        fbToken = j.id_token; fbTokenExp = Date.now() + (+j.expires_in || 3600) * 1000;
+        try { localStorage.setItem(FB_RT_KEY, j.refresh_token); } catch {}
+        return fbToken;
+      }
+    }
+    const r = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + FB_KEY, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: '{"returnSecureToken":true}',
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    fbToken = j.idToken; fbTokenExp = Date.now() + (+j.expiresIn || 3600) * 1000;
+    try { localStorage.setItem(FB_RT_KEY, j.refreshToken); } catch {}
+    return fbToken;
+  } catch { return null; }
+}
+
+async function cloudFetchLB() {
+  try {
+    const tok = await fbAuthToken();
+    if (!tok) throw new Error('no auth');
+    const r = await fetch(`${FB_DB}${FB_PATH}.json?auth=${tok}`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json() || {};
+    cloudLB = Object.values(data).filter(e => e && typeof e.score === 'number');
+    if (!cloudOK) { cloudOK = true; log('Leaderboard: synced with gym cloud', 'ok'); }
+    refreshIdleInfo();
+  } catch (e) {
+    if (cloudOK) log('Leaderboard sync lost — showing local scores', 'warn');
+    cloudOK = false;
+  }
+}
+
+function cloudPushLB(entry) {
+  fbAuthToken().then(tok => {
+    if (!tok) return;
+    return fetch(`${FB_DB}${FB_PATH}.json?auth=${tok}`,
+                 { method: 'POST', body: JSON.stringify(entry) })
+      .then(() => cloudFetchLB());
+  }).catch(() => {});
+}
+
+function loadLocalLB() {
+  try { return JSON.parse(localStorage.getItem(LB_KEY)) || []; }
+  catch { return []; }
+}
+// Merged view: cloud entries + locally-recorded ones (deduped — a score this
+// device pushed exists in both with identical fields), top-10 per mode.
+function loadLB() {
+  const local = loadLocalLB();
+  if (!cloudLB.length) return local;
+  const seen = new Set();
+  const all = [];
+  for (const e of [...cloudLB, ...local]) {
+    const k = `${e.i}|${e.score}|${e.t}|${e.m || ''}`;
+    if (seen.has(k)) continue;
+    seen.add(k); all.push(e);
+  }
+  all.sort((a, b) => b.score - a.score);
+  const counts = {};
+  return all.filter(e => {
+    const k = lbBucket(e);
+    counts[k] = (counts[k] || 0) + 1;
+    return counts[k] <= 10;
+  });
+}
+// Leaderboards are PER GAME MODE × STANCE — scores across modes aren't
+// comparable (different scoring economies), and a single-leg ladder is a
+// different sport from two-feet. Daily-challenge entries live on their own
+// per-day board (stance-agnostic — the variant is identical for everyone).
+// Legacy entries: no mode → default mode; no stance → both-feet.
+function lbModeOf(e)   { return e.m && GAME_MODES[e.m] ? e.m : DEFAULT_MODE; }
+function lbStanceOf(e) { return e.st === 'L' || e.st === 'R' ? e.st : 'B'; }
+function lbBucket(e)   { return e.d ? `d|${e.d}` : `m|${lbModeOf(e)}|${lbStanceOf(e)}`; }
+function lbForMode(key) {
+  return loadLB().filter(e => !e.d && lbModeOf(e) === key && lbStanceOf(e) === stance);
+}
+function lbForDaily()  { return loadLB().filter(e => e.d === todayKey()); }
+function lbBoardForGame() { return gameState.daily ? lbForDaily() : lbForMode(gameState.mode); }
+function lbQualifies(score, modeKey) {
+  const b = gameState.daily ? lbForDaily() : lbForMode(modeKey || gameState.mode);
+  return score > 0 && (b.length < 10 || score > b[b.length - 1].score);
+}
+function addLB(initials, score, smallest, modeKey) {
+  const m = (modeKey && GAME_MODES[modeKey]) ? modeKey : gameState.mode;
+  const entry = { i: initials, score, s: smallest, t: Date.now(), m,
+                  st: gameState.stance || stance };
+  if (gameState.daily) entry.d = gameState.daily;
+  let b = loadLocalLB();                   // local store keeps only local-trimmed entries
+  b.push(entry);
+  b.sort((a, b2) => b2.score - a.score);
+  const counts = {};                       // keep top-10 per bucket
+  b = b.filter(e => {
+    const k = lbBucket(e);
+    counts[k] = (counts[k] || 0) + 1;
+    return counts[k] <= 10;
+  });
+  try { localStorage.setItem(LB_KEY, JSON.stringify(b)); } catch {}
+  cloudPushLB(entry);                      // share to the gym board (fire-and-forget)
+  refreshIdleInfo();
+}
+
+function updateHistorySummary() {
+  $('hist-title').textContent = isGuest()
+    ? 'Game history — Guest (not saved)'
+    : `Game history — ${players.current}`;
+  const h = loadHistory();
+  if (!h.length) { $('hist-summary').textContent = 'No sessions yet'; }
+  else {
+    const bestScore = Math.max(...h.map(e => e.score));
+    const ringVals  = h.map(e => e.smallest).filter(v => isFinite(v) && v != null);
+    const bestRing  = ringVals.length ? Math.min(...ringVals) : NaN;
+    $('hist-summary').textContent =
+      `${h.length} session${h.length > 1 ? 's' : ''} · best score ${bestScore.toLocaleString()}` +
+      (isFinite(bestRing) ? ` · best ring ±${bestRing.toFixed(1)}cm` : '');
+  }
+  const list = $('hist-list');
+  if (list) {
+    list.innerHTML = h.slice(-10).reverse().map(e => {
+      const d = new Date(e.t);
+      const when = isNaN(d) ? '' :
+        d.toLocaleDateString([], { day: 'numeric', month: 'short' }) + ' ' +
+        d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const lbl = (e.daily ? '⭐ ' : '') + (GAME_MODES[e.mode] || { label: e.mode }).label +
+                  (e.stance === 'L' ? ' · L leg' : e.stance === 'R' ? ' · R leg' : '');
+      return `<div class="hist-row"><span>${when}</span><span>${lbl}</span>` +
+             `<span class="hr-score">${(e.score || 0).toLocaleString()}</span>` +
+             `<span>${e.smallest != null && isFinite(e.smallest) ? '±' + e.smallest.toFixed(1) + 'cm' : '–'}</span>` +
+             `<span>${e.pct != null ? e.pct + '%' : ''}</span></div>`;
+    }).join('') || '';
+  }
+  refreshIdleInfo();
+}
+$('btn-clear-hist').addEventListener('click', () => {
+  if (isGuest()) { log('Guest has no saved history'); return; }
+  try { localStorage.removeItem(historyKey()); } catch {}
+  updateHistorySummary();
+  log(`Game history cleared for ${players.current}`);
+});
+$('btn-clear-lb').addEventListener('click', async () => {
+  const scope = cloudOK ? 'the SHARED gym leaderboard for every device' : 'this device’s leaderboard';
+  if (!confirm(`Clear ${scope}?`)) return;
+  try { localStorage.removeItem(LB_KEY); } catch {}
+  if (cloudOK) {
+    try {
+      const tok = await fbAuthToken();
+      if (tok) await fetch(`${FB_DB}${FB_PATH}.json?auth=${tok}`, { method: 'DELETE' });
+    } catch {}
+    cloudLB = [];
+  }
+  refreshIdleInfo();
+  log('Leaderboard cleared');
+});
+
+// Streak: consecutive calendar days (ending today or yesterday) with ≥1
+// saved session.
+function dayStreak(history) {
+  const days = new Set(history.map(e => new Date(e.t).toDateString()));
+  if (!days.size) return 0;
+  const d = new Date();
+  if (!days.has(d.toDateString())) d.setDate(d.getDate() - 1); // anchor on yesterday
+  let n = 0;
+  while (days.has(d.toDateString())) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
+
+// Cached info for the idle attract screen (recomputed on storage changes,
+// not per frame).
+let idleInfo = null;
+function refreshIdleInfo() {
+  const h = loadHistory();
+  // Rank / best / sparkline follow the SELECTED stance — three ladders to
+  // climb. The day-streak counts any stance (you showed up, it counts).
+  const hs = h.filter(e => (e.stance || 'B') === stance);
+  const ringVals = hs.map(e => e.smallest).filter(v => isFinite(v) && v != null);
+  idleInfo = {
+    rankIdx: ringVals.length ? rankForRing(Math.min(...ringVals)) : null,
+    best:    ringVals.length ? Math.min(...ringVals) : NaN,
+    spark:   ringVals.slice(-10),
+    streak:  dayStreak(h),
+    lb:      loadLB(),
+  };
+  renderMainLB();
+}
+
+// Permanent leaderboard panel on the main page — shows the board for the
+// SELECTED game (switches with the mode cards); shared across all players.
+function renderMainLB() {
+  const el = $('lb-main');
+  if (!el) return;
+  const curMode = GAME_MODES[$('g-mode').value] ? $('g-mode').value : DEFAULT_MODE;
+  const stanceLbl = (STANCES.find(s => s[0] === stance) || ['', ''])[1].replace(/^\S+\s/, '');
+  if ($('lb-card-title')) {
+    $('lb-card-title').textContent = dailyActive
+      ? `Daily Challenge — ${dailyChallenge().name} · today · ` +
+        (cloudOK ? 'gym-wide' : 'this device')
+      : `Leaderboard — ${GAME_MODES[curMode].label} · ${stanceLbl} · ` +
+        (cloudOK ? 'gym-wide, all devices' : 'this device');
+  }
+  const board = dailyActive ? lbForDaily() : lbForMode(curMode);
+  el.innerHTML = board.map((e, i) => {
+    const d = e.t ? new Date(e.t) : null;
+    const when = d && !isNaN(d) ? d.toLocaleDateString([], { day: 'numeric', month: 'short' }) : '';
+    const mine = !isGuest() && e.i === players.current.slice(0, 8);
+    return `<div class="hist-row${mine ? ' me' : ''}"><span>#${i + 1}</span>` +
+           `<span class="hr-name">${e.i}</span>` +
+           `<span class="hr-score">${(e.score || 0).toLocaleString()}</span>` +
+           `<span>${e.s != null && isFinite(e.s) ? '±' + e.s.toFixed(1) + 'cm' : '–'}</span>` +
+           `<span>${when}</span></div>`;
+  }).join('') ||
+  `<span style="font-size:12px;color:var(--text3);">No scores yet — finish a game to claim the top spot</span>`;
+}
+
+// Personalised starting size: returning players start near where their last
+// session settled (+15 % ease-in) instead of restarting from scratch.
+// Pop mode keeps its own lineage since its "ring" is the target size.
+function personalStart(kind) {
+  const isPop = kind === 'pop';
+  // Per-stance lineage (single-leg ability ≠ two-feet ability), and daily
+  // games are excluded — their fixed starts aren't a personal signal.
+  const h = loadHistory().filter(e => {
+    const m = GAME_MODES[e.mode];
+    return m && ((m.kind === 'pop') === isPop) && isFinite(e.endRing) &&
+           !e.daily && (e.stance || 'B') === stance;
+  });
+  const def = isPop ? POP_START_R : START_RING_DEG;
+  if (!h.length) return def;
+  const base = h[h.length - 1].endRing;
+  const lo = isPop ? POP_MIN_R * 1.4 : MIN_RING_DEG * 1.6;
+  return clamp(base * 1.15, lo, def);
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Audio — event beeps + a continuous balance tone (sonification): the tone's
+// pitch rises as the dot drifts toward the ring edge, so the game is playable
+// by ear while watching your feet. Off by default; toggle persists.
+// AudioContext unlocks lazily on a user gesture (browser autoplay policy).
+// ───────────────────────────────────────────────────────────────────────────
+let soundOn  = false;
+let audioCtx = null;
+let drone    = null;   // {o, g} continuous balance tone while playing
+
+function ensureAudio() {
+  if (!soundOn) return;
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch { return; }
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+function beep(freq, durMs = 110, gain = 0.07) {
+  if (!soundOn || !audioCtx) return;
+  try {
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + durMs / 1000);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(t); o.stop(t + durMs / 1000 + 0.02);
+  } catch {}
+}
+function arpeggio() {
+  [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 120, 0.06), i * 90));
+}
+function droneStart() {
+  if (!soundOn) return;
+  ensureAudio();
+  if (!audioCtx || drone) return;
+  try {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.value = 200;
+    g.gain.value = 0;
+    o.connect(g).connect(audioCtx.destination);
+    o.start();
+    drone = { o, g };
+  } catch {}
+}
+function droneUpdate(prox) { // 0 = dead centre … 1 = at edge … >1 outside
+  if (!drone || !audioCtx) return;
+  try {
+    const t = audioCtx.currentTime;
+    const f = 170 + 330 * Math.pow(Math.min(1.4, Math.max(0, prox)), 2);
+    drone.o.frequency.setTargetAtTime(f, t, 0.05);
+    const vol = soundOn ? 0.016 + 0.018 * Math.min(1, prox) : 0;
+    drone.g.gain.setTargetAtTime(vol, t, 0.08);
+  } catch {}
+}
+function droneStop() {
+  if (!drone) return;
+  try {
+    const t = audioCtx.currentTime;
+    drone.g.gain.setTargetAtTime(0.0001, t, 0.05);
+    drone.o.stop(t + 0.3);
+  } catch {}
+  drone = null;
+}
+function setSoundButton() {
+  $('btn-sound').textContent = soundOn ? '🔊' : '🔇';
+  $('btn-sound').className = 'btn-icon' + (soundOn ? ' on' : '');
+}
+$('btn-sound').addEventListener('click', () => {
+  soundOn = !soundOn;
+  setSoundButton();
+  savePrefs();
+  if (soundOn) {
+    ensureAudio(); beep(523, 90);
+    if (gameState.phase === 'playing') droneStart();
+  } else {
+    droneStop();
+  }
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Screen wake lock — a hands-free game on a gym tablet must not be
+// interrupted by the screen dimming. Best-effort; re-acquired if the tab
+// regains visibility mid-session.
+// ───────────────────────────────────────────────────────────────────────────
+let wakeLock = null;
+async function requestWakeLock() {
+  try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }
+  catch {}
+}
+function releaseWakeLock() {
+  try { if (wakeLock) wakeLock.release(); } catch {}
+  wakeLock = null;
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && recording) requestWakeLock();
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Adaptive games.
+//
+// FLOW CONTROLLER — the heart of "everyone plays at their own edge".
+// Flow lives in a band of success: ~70–85 % time-in-zone. Instead of fixed
+// grow/shrink rates, a rolling EMA of inside-time (τ ≈ 8 s) steers the
+// difficulty toward FLOW_TARGET for every player:
+//   • struggling (EMA below target) → the ring opens faster and shrink
+//     steps pause entirely below 65 %;
+//   • cruising  (EMA above 90 %)   → the hold drops 3 s → 2 s and steps
+//     get bigger (×0.80), so strong players are pushed down quickly.
+// The result: a frail beginner and an athlete both live at ~78 % success.
+//
+// Modes:
+//   • Hold the Zone (3×20 s default / 60 s / 30 s) — stay inside the ring.
+//   • Weight Shift — the zone orbits the centre; deliberate weight transfer.
+//   • Target Pop  — lean into targets and hold 0.6 s to pop them;
+//     directional reaction training, own success/timeout adaptation.
+//   • Calm — the ring breathes at 6 breaths/min; balance + paced breathing.
+//
+// Round 1 opens with a 10 s WARM-UP: no shrinking, gentler growth — let the
+// player win first, then make it honest.
+//
+// RANKS turn ring size into identity: ≤1.4cm Diamond, ≤2.2cm Platinum,
+// ≤3.2cm Gold, ≤4.4cm Silver, else Bronze. The band name rides on the ring,
+// promotions are announced mid-game, and the player's best rank greets them
+// on the idle screen.
+//
+// Scoring stays ABSOLUTE and linear in 1/size (score/sec = 100 × 4cm/ring)
+// so history remains comparable across sessions; streaks are cosmetic only.
+// ───────────────────────────────────────────────────────────────────────────
+const GAME_MODES = {
+  rounds3x20:   { label: 'Hold the Zone · 3 × 20 s',   kind: 'zone',  rounds: 3, roundS: 20, restS: 10 },
+  continuous60: { label: 'Hold the Zone · 60 s',       kind: 'zone',  rounds: 1, roundS: 60, restS: 0  },
+  quick30:      { label: 'Hold the Zone · 30 s quick', kind: 'zone',  rounds: 1, roundS: 30, restS: 0  },
+  orbit3x20:    { label: 'Weight Shift · 3 × 20 s',    kind: 'orbit', rounds: 3, roundS: 20, restS: 10 },
+  pop3x20:      { label: 'Target Pop · 3 × 20 s',      kind: 'pop',   rounds: 3, roundS: 20, restS: 10 },
+  calm60:       { label: 'Calm · 60 s breathing',      kind: 'calm',  rounds: 1, roundS: 60, restS: 0  },
+};
+const DEFAULT_MODE = 'rounds3x20';
+
+// Mode cards shown in the UI — one card per game kind; the zone card carries
+// duration chips that map to the three zone mode keys.
+const MODE_CARDS = [
+  { kind: 'zone',  icon: '🎯', name: 'Hold the Zone', desc: 'Stay steady as the ring tightens', accent: '#4ade80',
+    defaultMode: 'rounds3x20',
+    durations: [['rounds3x20', '3×20s'], ['continuous60', '60s'], ['quick30', '30s']] },
+  { kind: 'orbit', icon: '🔄', name: 'Weight Shift',  desc: 'Follow the slowly moving zone',    accent: '#fbbf24',
+    defaultMode: 'orbit3x20' },
+  { kind: 'pop',   icon: '💥', name: 'Target Pop',    desc: 'Lean in fast, hold to pop targets', accent: '#60a5fa',
+    defaultMode: 'pop3x20' },
+  { kind: 'calm',  icon: '🌊', name: 'Calm',          desc: 'Balance + slow paced breathing',    accent: '#7dd3fc',
+    defaultMode: 'calm60' },
+];
+function selectedAccent() {
+  if (dailyActive) return '#fbbf24';
+  const m = GAME_MODES[$('g-mode').value] || GAME_MODES[DEFAULT_MODE];
+  const c = MODE_CARDS.find(c2 => c2.kind === m.kind);
+  return c ? c.accent : '#4ade80';
+}
+
+// ── Daily challenge — one shared variant per day, seeded from the date ─────
+// Everyone plays the same mode with the same FIXED starting size (no
+// personalised start), so the daily board compares like with like. Entries
+// are tagged with the day and live on their own board.
+const DAILY_VARIANTS = [
+  { name: 'Steady Classic',  mode: 'continuous60', startRing: 4.8 },
+  { name: 'Tight Start',     mode: 'continuous60', startRing: 3.2 },
+  { name: 'Sprint',          mode: 'quick30',      startRing: 4   },
+  { name: 'Triple Threat',   mode: 'rounds3x20',   startRing: 4.8 },
+  { name: 'Orbit Day',       mode: 'orbit3x20',    startRing: 5.6 },
+  { name: 'Pop Rush',        mode: 'pop3x20',      startRing: 2.4 },
+  { name: 'Big Sky',         mode: 'continuous60', startRing: 7.2 },
+  { name: 'Pop Precision',   mode: 'pop3x20',      startRing: 1.8 },
+  { name: 'Endurance Orbit', mode: 'orbit3x20',    startRing: 4.4 },
+  { name: 'Quick & Tight',   mode: 'quick30',      startRing: 3.2 },
+];
+let dailyActive = false;
+
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function dailyChallenge() {
+  const k = todayKey();
+  let h = 0;
+  for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) >>> 0;
+  return { ...DAILY_VARIANTS[h % DAILY_VARIANTS.length], day: k };
+}
+
+function renderDailyCard() {
+  const el = $('daily-card');
+  if (!el) return;
+  const dc = dailyChallenge();
+  el.className = 'daily-card' + (dailyActive ? ' sel' : '') +
+                 ($('g-mode').disabled ? ' locked' : '');
+  el.innerHTML =
+    `<span class="dc-icon">⭐</span>` +
+    `<span><div class="dc-name">Daily Challenge — ${dc.name}</div>` +
+    `<div class="dc-desc">${GAME_MODES[dc.mode].label} · fixed ±${dc.startRing} cm start, same for everyone · own board, resets daily</div></span>` +
+    `<span class="dc-tag">${dailyActive ? '✓ SELECTED' : 'TODAY'}</span>`;
+}
+$('daily-card').addEventListener('click', () => {
+  if ($('g-mode').disabled) return;
+  dailyActive = !dailyActive;
+  if (dailyActive) $('g-mode').value = dailyChallenge().mode;
+  savePrefs();
+  renderDailyCard();
+  renderModeCards();
+  renderMainLB();
+  drawTiltPlot(lastRoll, lastPitch);
+});
+// Gym tablets stay open for days — refresh the card (and board) on rollover.
+let dailyShownDay = todayKey();
+setInterval(() => {
+  if (todayKey() !== dailyShownDay) {
+    dailyShownDay = todayKey();
+    renderDailyCard();
+    renderMainLB();
+  }
+}, 60000);
+
+// ── Stance — two-leg / single-left / single-right ──────────────────────────
+// Same games, separate ladders: every history + leaderboard entry is tagged
+// with the stance it was played in, and boards/rank/personal-start all filter
+// by the selected stance. Legacy untagged entries count as both-feet.
+const STANCES = [
+  ['B', '🦶🦶 Both feet'],
+  ['L', '🦵 Left leg'],
+  ['R', '🦵 Right leg'],
+];
+let stance = 'B';
+
+function renderStanceRow() {
+  const el = $('stance-row');
+  if (!el) return;
+  el.className = 'stance-row' + ($('g-mode').disabled ? ' locked' : '');
+  el.innerHTML = `<span class="st-label">Stance</span>` + STANCES.map(([k, lbl]) =>
+    `<span class="mc-chip${k === stance ? ' sel' : ''}" data-st="${k}" ` +
+    `style="--mc:#4ade80;">${lbl}</span>`).join('');
+}
+$('stance-row').addEventListener('click', (ev) => {
+  if ($('g-mode').disabled) return;
+  const k = ev && ev.target && ev.target.getAttribute && ev.target.getAttribute('data-st');
+  if (!k || k === stance) return;
+  stance = k;
+  savePrefs();
+  renderStanceRow();
+  renderMainLB();
+  updateHistorySummary();   // rank/spark/personal-start now reflect this stance
+  log(`Stance: ${(STANCES.find(s => s[0] === k) || ['', k])[1]}`);
+});
+
+// ── Spatial scale: every ring size is in CENTIMETRES of centre-of-pressure
+// travel now (the IMU board used degrees of tilt). These are the IMU board's
+// proportions rescaled to a ±12 cm plot (×0.4). Because the score rate is a
+// ratio (SCORE_REF / radius), rescaling preserves the difficulty + scoring
+// curve exactly — only the unit changes. *** TUNE on the physical plate. ***
+// (The _DEG suffixes are kept to avoid churning every reference — read as cm.)
+const START_RING_DEG        = 6;    // cm — first-ever session starting ring
+const SHRINK_FACTOR         = 0.85; // base ring step (flow controller may use 0.80)
+const GROW_PER_S            = 0.06; // base grow rate while outside (flow-scaled)
+const MIN_RING_DEG          = 1.0;  // cm — below ~1 cm is under the load-cell+EMA
+                                    // noise floor; measure on hardware and tune
+const MAX_RING_DEG          = 12;   // cm — full plot
+const SCORE_REF_DEG         = 4;    // cm — ring size at which rate = SCORE_PER_SECOND_BASE
+const SCORE_PER_SECOND_BASE = 100;  // pts/sec at the reference ring size
+const COUNTDOWN_S           = 3;    // settle time before each round
+const OUTSIDE_GRACE_S       = 0.15; // excursion must persist this long to count
+const ORBIT_PERIOD_S        = 24;   // weight-shift: seconds per full orbit
+const ORBIT_CENTER_FRAC     = 0.55; // orbit radius = this × current ring radius
+const MIN_SAVE_SCORING_S    = 10;   // don't pollute history with aborted games
+const FLOW_TARGET           = 0.78; // steer every player to ~78 % time-in-zone
+const FLOW_TAU_S            = 8;    // EMA time constant for the flow controller
+const WARMUP_S              = 10;   // round-1 confidence window (no shrinking)
+const POP_HOLD_S            = 0.6;  // hold inside a target to pop it
+const POP_TIMEOUT_S         = 6;    // un-popped target relocates closer + bigger
+const POP_START_R           = 2.5;  // cm — first-ever target radius
+const POP_MIN_R             = 1.0;
+const POP_MAX_R             = 4;
+const POP_PTS_BASE          = 250;  // points at POP_START_R, scales with 1/r
+const CALM_PERIOD_S         = 10;   // 6 breaths/min
+const CALM_AMP              = 0.30; // ring breathes ±30 % around its base size
+const STAND_MIN_KG          = 15;   // below this total load = nobody on the plate → pause game
+
+const RANKS = [
+  { name: 'DIAMOND',  max: 1.4,  color: '#7dd3fc' },
+  { name: 'PLATINUM', max: 2.2,  color: '#e5e7eb' },
+  { name: 'GOLD',     max: 3.2,  color: '#fbbf24' },
+  { name: 'SILVER',   max: 4.4,  color: '#a8a8b3' },
+  { name: 'BRONZE',   max: 1e9,  color: '#d97706' },
+];
+function rankForRing(r) {
+  for (let i = 0; i < RANKS.length; i++) if (r <= RANKS[i].max) return i;
+  return RANKS.length - 1;
+}
+
+const gameState = {
+  phase: 'idle',          // 'idle' | 'tutorial' | 'countdown' | 'playing' | 'rest' | 'done'
+  mode: DEFAULT_MODE,
+  daily: null,            // 'YYYY-MM-DD' when this game is the daily challenge
+  stance: 'B',            // stance this game is being played in (stamped at start)
+  roundIndex: 0,
+  startMs: 0,             // game start (first countdown)
+  phaseStartMs: 0,        // start of the current phase
+  lastTickMs: 0,
+  countdownShown: 0,      // last whole second beeped during countdown
+  restMessage: '',        // per-round feedback shown during rest
+  roundStartRing: 0,      // ring at round start, for the feedback line
+  currentRadius: 0,       // logic ring (zone/orbit) or breathing base (calm)
+  effRadius: 0,           // effective radius this tick (calm breathing applied)
+  displayRadius: 0,       // animated radius the canvas draws
+  smallestRing: Infinity,
+  score: 0,
+  timeInZoneMs: 0,
+  totalScoringMs: 0,
+  insideStreakMs: 0,
+  pendingOutsideMs: 0,    // grace-period accumulator
+  inside: false,
+  lastCrossBeepMs: 0,
+  targetX: 0, targetY: 0, // zone centre in degrees (orbit mode)
+  // Flow controller + juice state
+  flowEMA: FLOW_TARGET,
+  shrinkEnabled: true,
+  shrinkHoldS: 3,
+  warmup: false,
+  flashT: 0,              // white flash after a shrink step
+  streak: 0,              // consecutive shrinks without leaving the zone
+  rankIdx: RANKS.length - 1,
+  breatheIn: true,        // calm-mode pacer text
+  // Live ladder: snapshot of this mode's board at game start + current rank
+  liveBoard: [], liveRank: 0,
+  // Per-round stats → end-screen stars
+  roundInMs: 0, roundTotMs: 0, roundStats: [],
+  // Target Pop state
+  pop: { x: 0, y: 0, r: POP_START_R, reach: 8, holdMs: 0, idleMs: 0 },
+  // Game-time-only drift accumulators (the session sway accumulator also
+  // covers countdowns/rests, so it can't be used for play-time drift).
+  gN: 0, gSumR: 0, gSumP: 0, gSumR2: 0, gSumP2: 0,
+};
+
+const celebration = { active: false, t0: 0, score: 0, rankIdx: RANKS.length - 1,
+                      stars: [], newBest: false, subline: '' };
+
+function resetGameState() {
+  gameState.phase = 'idle';
+  gameState.daily = null;
+  gameState.stance = stance;
+  gameState.roundIndex = 0;
+  gameState.startMs = 0;
+  gameState.phaseStartMs = 0;
+  gameState.lastTickMs = 0;
+  gameState.countdownShown = 0;
+  gameState.restMessage = '';
+  gameState.roundStartRing = 0;
+  gameState.currentRadius = 0;
+  gameState.effRadius = 0;
+  gameState.displayRadius = 0;
+  gameState.smallestRing = Infinity;
+  gameState.score = 0;
+  gameState.timeInZoneMs = 0;
+  gameState.totalScoringMs = 0;
+  gameState.insideStreakMs = 0;
+  gameState.pendingOutsideMs = 0;
+  gameState.inside = false;
+  gameState.lastCrossBeepMs = 0;
+  gameState.targetX = 0; gameState.targetY = 0;
+  gameState.flowEMA = FLOW_TARGET;
+  gameState.shrinkEnabled = true;
+  gameState.shrinkHoldS = 3;
+  gameState.warmup = false;
+  gameState.flashT = 0;
+  gameState.streak = 0;
+  gameState.rankIdx = RANKS.length - 1;
+  gameState.breatheIn = true;
+  gameState.roundInMs = 0; gameState.roundTotMs = 0; gameState.roundStats = [];
+  gameState.liveBoard = []; gameState.liveRank = 0;
+  gameState.pop = { x: 0, y: 0, r: POP_START_R, reach: 8, holdMs: 0, idleMs: 0 };
+  gameState.gN = 0; gameState.gSumR = 0; gameState.gSumP = 0;
+  gameState.gSumR2 = 0; gameState.gSumP2 = 0;
+  celebration.active = false;
+  particles.length = 0;
+  popups.length = 0;
+  $('g-phase').textContent = 'idle';
+  $('g-phase').style.color = 'var(--text2)';
+  $('g-round').textContent = '–';
+  $('g-ring').textContent  = '–';
+  $('g-best').textContent  = '–';
+  $('g-final').style.display = 'none';
+  $('g-final').innerHTML = '';
+  $('g-mode').disabled = false;
+  renderModeCards();
+  renderDailyCard();
+  renderStanceRow();
+  refreshStatus();
+}
+
+const STATUS_BY_PHASE = {
+  tutorial:  'Quick how-to — follow the hints (tap the circle to skip)',
+  countdown: 'Get steady…',
+  playing:   'Go!',
+  rest:      'Rest — breathe easy',
+  done:      'Nice work! Press Play to go again',
+};
+function refreshStatus() {
+  if (gameState.phase !== 'idle') {
+    $('g-status').textContent = STATUS_BY_PHASE[gameState.phase] || '';
+  } else {
+    $('g-status').textContent = connected
+      ? 'Ready — step on the plate and press Play'
+      : 'Connect your plate to play';
+  }
+}
+
+function setPhase(phase, color) {
+  gameState.phase = phase;
+  gameState.phaseStartMs = Date.now();
+  $('g-phase').textContent = phase;
+  $('g-phase').style.color = color || 'var(--text2)';
+  refreshStatus();
+}
+
+function startGame() {
+  resetGameState();
+  // Daily challenge: forced mode + FIXED start size (no personalised start),
+  // so everyone on the daily board played the identical game.
+  const dc = dailyActive ? dailyChallenge() : null;
+  gameState.daily  = dc ? dc.day : null;
+  gameState.stance = stance;
+  gameState.mode = dc ? dc.mode
+                      : (GAME_MODES[$('g-mode').value] ? $('g-mode').value : DEFAULT_MODE);
+  $('g-mode').disabled = true;
+  renderModeCards();
+  renderDailyCard();
+  renderStanceRow();
+  const mode = GAME_MODES[gameState.mode];
+  const start = dc ? dc.startRing : personalStart(mode.kind);
+  gameState.startMs       = Date.now();
+  gameState.lastTickMs    = gameState.startMs;
+  // Live-ladder snapshot: the players you're climbing past in real time.
+  gameState.liveBoard = lbBoardForGame().map(e => ({ i: e.i, score: e.score }));
+  gameState.liveRank  = gameState.liveBoard.length + 1;
+  if (mode.kind === 'pop') {
+    gameState.pop.r = start;
+    gameState.currentRadius = start;
+    respawnPopTarget();
+  } else {
+    gameState.currentRadius = start;
+  }
+  gameState.effRadius      = gameState.currentRadius;
+  gameState.displayRadius  = gameState.currentRadius;
+  gameState.smallestRing   = Infinity;
+  gameState.roundStartRing = start;
+  gameState.rankIdx        = rankForRing(start);
+  $('g-round').textContent = `1 / ${mode.rounds}`;
+  $('g-ring').textContent  = `±${start.toFixed(1)}cm`;
+  if (!tutorialDone()) startTutorial(); else startCountdown();
+  const personal = !dc && start < (mode.kind === 'pop' ? POP_START_R : START_RING_DEG) - 0.05;
+  log(`Game started — ${dc ? `⭐ Daily Challenge (${dc.name}), ` : ''}${mode.label}, ` +
+      `${mode.kind === 'pop' ? 'target' : 'ring'} ±${start.toFixed(1)}cm` +
+      (personal ? ' (from your last session)' : ''), 'ok');
+}
+
+function startCountdown() {
+  setPhase('countdown', 'var(--amber)');
+  gameState.countdownShown = 0;
+}
+
+// ── First-run tutorial — three guided steps driven by real board input ─────
+// Runs once per player, between PLAY and the first countdown: lean (see the
+// dot respond) → re-center → meet the ring. Each step advances on the
+// player's actual movement, with a timeout so nobody gets stuck. Tap the
+// arena to skip. ~15 s total.
+const TUT_KEY = 'bb_tut_v1';
+const tut = { step: 0, t0: 0, holdMs: 0 };
+
+function tutorialDone() {
+  try { return !!localStorage.getItem(TUT_KEY + '::' + players.current); }
+  catch { return true; }
+}
+function markTutorialDone() {
+  try { localStorage.setItem(TUT_KEY + '::' + players.current, '1'); } catch {}
+}
+function startTutorial() {
+  tut.step = 0; tut.t0 = Date.now(); tut.holdMs = 0;
+  setPhase('tutorial', 'var(--blue)');
+  log('First game — quick how-to (tap the circle to skip)');
+}
+function advanceTut() {
+  tut.step++; tut.t0 = Date.now(); tut.holdMs = 0;
+  beep(784, 120);
+}
+function finishTutorial() {
+  if (gameState.phase !== 'tutorial') return;
+  markTutorialDone();
+  beep(1047, 150);
+  startCountdown();
+}
+tiltCanvas.addEventListener('click', () => {
+  if (gameState.phase === 'tutorial') finishTutorial();
+});
+
+function beginRound() {
+  setPhase('playing', 'var(--green)');
+  gameState.roundStartRing = gameState.currentRadius;
+  gameState.insideStreakMs = 0;
+  gameState.pendingOutsideMs = 0;
+  gameState.roundInMs = 0; gameState.roundTotMs = 0;
+  beep(880, 140);
+  droneStart();
+  const mode = GAME_MODES[gameState.mode];
+  $('g-round').textContent = `${gameState.roundIndex + 1} / ${mode.rounds}`;
+  if (gameState.roundIndex === 0 && mode.kind !== 'pop') {
+    spawnPopup('WARM-UP', 0, 6, '#fbbf24', 14);
+  }
+}
+
+function endRound() {
+  const mode = GAME_MODES[gameState.mode];
+  droneStop();
+  gameState.roundStats.push({ inMs: gameState.roundInMs, totMs: gameState.roundTotMs });
+  const lastRound = gameState.roundIndex >= mode.rounds - 1;
+  if (lastRound) {
+    // Auto-end. Routing through stopRecording also triggers the CSV save.
+    if (recording) stopRecording(); else finishGame();
+    return;
+  }
+  // Per-round feedback: how much the ring tightened this round.
+  const change = gameState.roundStartRing > 0
+    ? 100 * (gameState.roundStartRing - gameState.currentRadius) / gameState.roundStartRing
+    : 0;
+  gameState.restMessage = change > 2
+    ? `RING ${change.toFixed(0)}% TIGHTER THIS ROUND`
+    : (change < -2 ? 'RING OPENED UP — BREATHE, RESET' : 'RING HELD STEADY');
+  beep(659, 160);
+  setPhase('rest', 'var(--blue)');
+  log(`Round ${gameState.roundIndex + 1} done — ring ±${gameState.currentRadius.toFixed(1)} cm`);
+}
+
+function rateSkill(score, smallest) {
+  if (score >= 12000 || smallest <= 1.2) return 'Elite';
+  if (score >=  8000 || smallest <= 1.8) return 'Advanced';
+  if (score >=  5000 || smallest <= 2.6) return 'Intermediate';
+  if (score >=  2500)                    return 'Beginner';
+  return 'Just starting';
+}
+
+function starsFor(inMs, totMs) {
+  const pct = totMs > 0 ? 100 * inMs / totMs : 0;
+  return pct >= 85 ? 3 : pct >= 70 ? 2 : 1;
+}
+
+function checkPromotion(smallest) {
+  const idx = rankForRing(smallest);
+  if (idx < gameState.rankIdx) {
+    gameState.rankIdx = idx;
+    spawnPopup(`${RANKS[idx].name} RING!`, 0, 5, RANKS[idx].color, 17);
+    arpeggio();
+    log(`Promotion — ${RANKS[idx].name} (±${smallest.toFixed(1)} cm)`, 'ok');
+  }
+}
+
+// Live ladder: rank of the in-progress score against the board snapshot,
+// with a "PASSED <name>!" moment each time the player overtakes someone —
+// the arcade feeling of watching your name climb while you play.
+function liveRankFor(score) {
+  let n = 0;
+  for (const e of gameState.liveBoard) if (e.score > score) n++;
+  return n + 1;
+}
+function updateLiveRank() {
+  if (!gameState.liveBoard.length) return;
+  const r = liveRankFor(gameState.score);
+  if (r < gameState.liveRank) {
+    if (r === 1) {
+      spawnPopup('TOP OF THE BOARD!', 0, 8, '#fbbf24', 15);
+      arpeggio();
+    } else {
+      const passed = gameState.liveBoard[r - 1];   // best entry now below us
+      if (passed) spawnPopup(`PASSED ${passed.i}!`, 0, 8, '#fbbf24', 13);
+      beep(659, 120);
+    }
+    gameState.liveRank = r;
+  }
+}
+
+function respawnPopTarget() {
+  const p = gameState.pop;
+  const ang = Math.random() * Math.PI * 2;
+  const maxD = Math.min(p.reach, maxAngle - p.r - 1);
+  const d = 2.5 + Math.random() * Math.max(0.5, maxD - 2.5);
+  p.x = Math.cos(ang) * d;
+  p.y = Math.sin(ang) * d;
+  p.holdMs = 0; p.idleMs = 0;
+}
+
+function tickGame() {
+  if (gameState.phase === 'idle' || gameState.phase === 'done') return;
+
+  const now  = Date.now();
+  const mode = GAME_MODES[gameState.mode];
+  // Clamp dt so a tab background-throttle can't dump huge accumulations.
+  const dt = Math.min(0.1, (now - gameState.lastTickMs) / 1000);
+  gameState.lastTickMs = now;
+
+  // BLE dropout mid-game: freeze the game clock so the round pauses while
+  // the auto-reconnect works, instead of timers running on stale data.
+  if (!connected && recording) {
+    gameState.phaseStartMs += dt * 1000;
+    gameState.startMs      += dt * 1000;
+    return;
+  }
+
+  // Nobody on the plate (anti-cheese + auto-pause). The firmware parks the dot
+  // at centre below ~15 kg, so freeze the game clock exactly like a BLE dropout
+  // does instead of accruing score / running timers on an empty plate — the
+  // empty-board-tops-the-leaderboard exploit the IMU board couldn't prevent.
+  if (recording && lastWeight < STAND_MIN_KG) {
+    gameState.phaseStartMs += dt * 1000;
+    gameState.startMs      += dt * 1000;
+    $('g-status').textContent = 'Step on the plate to continue…';
+    return;
+  }
+
+  const phaseS = (now - gameState.phaseStartMs) / 1000;
+
+  // ── first-run tutorial ──────────────────────────────────────────────────
+  if (gameState.phase === 'tutorial') {
+    const tilt = Math.hypot(lastRoll, lastPitch);
+    const stepS = (now - tut.t0) / 1000;
+    if (tut.step === 0) {                      // lean — see the dot respond
+      if (tilt > 5 || stepS > 8) advanceTut();
+    } else if (tut.step === 1) {               // bring it back to center
+      tut.holdMs = tilt < 3 ? tut.holdMs + dt * 1000 : 0;
+      if (tut.holdMs > 800 || stepS > 10) advanceTut();
+    } else if (stepS > 5) {                    // meet the ring, then play
+      finishTutorial();
+    }
+    return;
+  }
+
+  // ── countdown ───────────────────────────────────────────────────────────
+  if (gameState.phase === 'countdown') {
+    const whole = Math.ceil(COUNTDOWN_S - phaseS);
+    if (whole !== gameState.countdownShown && whole >= 1) {
+      gameState.countdownShown = whole;
+      beep(660, 90);
+    }
+    if (phaseS >= COUNTDOWN_S) beginRound();
+    return;
+  }
+
+  // ── rest between rounds ─────────────────────────────────────────────────
+  if (gameState.phase === 'rest') {
+    if (phaseS >= mode.restS) {
+      gameState.roundIndex++;
+      startCountdown();
+    }
+    return;
+  }
+
+  // ── playing ─────────────────────────────────────────────────────────────
+  if (phaseS >= mode.roundS) { endRound(); return; }
+
+  if (mode.kind === 'pop') { tickPop(now, dt); return; }
+
+  // Warm-up: first 10 s of round 1 — no shrinking, gentler growth. Let the
+  // player succeed before the game gets honest.
+  const wasWarmup = gameState.warmup;
+  gameState.warmup = gameState.roundIndex === 0 && phaseS < WARMUP_S;
+  if (wasWarmup && !gameState.warmup) {
+    spawnPopup('GAME ON', 0, 6, '#4ade80', 15);
+    beep(784, 130);
+  }
+
+  // Weight-shift mode: the zone orbits the centre slowly; the player must
+  // follow it. Static modes keep the target at (0,0).
+  if (mode.kind === 'orbit') {
+    const ang = 2 * Math.PI * ((now - gameState.startMs) / 1000) / ORBIT_PERIOD_S;
+    const orbitR = gameState.currentRadius * ORBIT_CENTER_FRAC;
+    gameState.targetX = orbitR * Math.cos(ang);
+    gameState.targetY = orbitR * Math.sin(ang);
+  } else {
+    gameState.targetX = 0; gameState.targetY = 0;
+  }
+
+  // Calm mode: the ring breathes at 6 breaths/min around its base size.
+  if (mode.kind === 'calm') {
+    const ph = 2 * Math.PI * ((now - gameState.startMs) / 1000) / CALM_PERIOD_S;
+    gameState.effRadius = gameState.currentRadius * (1 + CALM_AMP * Math.sin(ph));
+    gameState.breatheIn = Math.cos(ph) > 0;   // ring expanding → inhale
+  } else {
+    gameState.effRadius = gameState.currentRadius;
+  }
+
+  const dist = Math.hypot(lastRoll - gameState.targetX, lastPitch - gameState.targetY);
+  const rawInside = dist <= gameState.effRadius;
+
+  // Grace debounce: an excursion only counts as OUTSIDE after it has
+  // persisted OUTSIDE_GRACE_S. Re-entry flips back to inside immediately.
+  if (rawInside) gameState.pendingOutsideMs = 0;
+  else           gameState.pendingOutsideMs += dt * 1000;
+  const inside = rawInside || gameState.pendingOutsideMs < OUTSIDE_GRACE_S * 1000;
+
+  // Audio cue on a real state change (throttled so flicker can't machine-gun).
+  if (inside !== gameState.inside && now - gameState.lastCrossBeepMs > 250) {
+    beep(inside ? 523 : 220, 100);
+    gameState.lastCrossBeepMs = now;
+  }
+  if (!inside && gameState.inside) gameState.streak = 0;  // streak breaks on exit
+  gameState.inside = inside;
+  gameState.totalScoringMs += dt * 1000;
+  gameState.roundTotMs     += dt * 1000;
+
+  // FLOW CONTROLLER — rolling EMA of inside-time steers the difficulty knobs
+  // so every player converges to ~FLOW_TARGET success.
+  gameState.flowEMA += ((inside ? 1 : 0) - gameState.flowEMA) * Math.min(1, dt / FLOW_TAU_S);
+  const growMult = clamp(1 + (FLOW_TARGET - gameState.flowEMA) * 3, 0.5, 2.5)
+                   * (gameState.warmup ? 0.5 : 1);
+  gameState.shrinkHoldS   = gameState.flowEMA > 0.90 ? 2 : 3;
+  gameState.shrinkEnabled = !gameState.warmup && gameState.flowEMA >= 0.65;
+  const shrinkFactor      = gameState.flowEMA > 0.92 ? 0.80 : SHRINK_FACTOR;
+
+  if (inside) {
+    // Score while inside — rate scales with 1/radius, so a tight ring is
+    // worth far more per second than a big one.
+    gameState.timeInZoneMs   += dt * 1000;
+    gameState.roundInMs      += dt * 1000;
+    gameState.insideStreakMs += dt * 1000;
+    gameState.score += SCORE_PER_SECOND_BASE *
+                       (SCORE_REF_DEG / gameState.effRadius) * dt;
+  } else {
+    // Outside — grow continuously until back in, faster when struggling.
+    gameState.insideStreakMs = 0;
+    gameState.currentRadius  = Math.min(MAX_RING_DEG,
+                                 gameState.currentRadius * (1 + GROW_PER_S * growMult * dt));
+  }
+
+  if (mode.kind === 'calm') {
+    // Calm adapts gently and continuously instead of in steps.
+    if (inside && gameState.flowEMA > 0.85) {
+      gameState.currentRadius = Math.max(MIN_RING_DEG,
+                                  gameState.currentRadius * (1 - 0.015 * dt));
+      if (gameState.currentRadius < gameState.smallestRing) {
+        gameState.smallestRing = gameState.currentRadius;
+        checkPromotion(gameState.smallestRing);
+      }
+    }
+  } else if (gameState.shrinkEnabled &&
+             gameState.insideStreakMs >= gameState.shrinkHoldS * 1000) {
+    // Shrink step — telegraphed by the progress arc + final-second pulse,
+    // landed with a flash, an inward particle burst, and a popup.
+    gameState.currentRadius = Math.max(MIN_RING_DEG,
+                                       gameState.currentRadius * shrinkFactor);
+    gameState.smallestRing  = Math.min(gameState.smallestRing,
+                                       gameState.currentRadius);
+    gameState.insideStreakMs = 0;
+    gameState.flashT = 0.25;
+    gameState.streak++;
+    spawnBurst(gameState.targetX, gameState.targetY, gameState.currentRadius, '#4ade80', 14, true);
+    spawnPopup(`±${gameState.currentRadius.toFixed(1)} cm`,
+               gameState.targetX, gameState.targetY + gameState.currentRadius + 1.5, '#4ade80', 12);
+    if (gameState.streak >= 2) {
+      spawnPopup(`×${gameState.streak} STREAK`, gameState.targetX,
+                 gameState.targetY - gameState.currentRadius - 2.5, '#fbbf24', 13);
+    }
+    beep(784, 100);
+    checkPromotion(gameState.smallestRing);
+  }
+
+  // Play-time drift accumulators (mean → drift direction, squares → RMS).
+  gameState.gN++;
+  gameState.gSumR  += lastRoll;        gameState.gSumP  += lastPitch;
+  gameState.gSumR2 += lastRoll ** 2;   gameState.gSumP2 += lastPitch ** 2;
+
+  updateLiveRank();
+
+  // Balance tone: pitch rises toward the edge.
+  droneUpdate(gameState.effRadius > 0 ? dist / gameState.effRadius : 0);
+
+  const rate = SCORE_PER_SECOND_BASE * SCORE_REF_DEG / gameState.effRadius;
+  $('g-ring').textContent = `±${gameState.effRadius.toFixed(1)}cm · ${Math.round(rate)}/s`;
+  $('g-best').textContent = isFinite(gameState.smallestRing)
+    ? `±${gameState.smallestRing.toFixed(1)}cm` : '–';
+}
+
+// Target Pop: lean into the target, hold to pop. Success → smaller target,
+// farther reach. Timeout → bigger target, closer in. Its own adaptation
+// loop, same flow result: every player pops at their own edge.
+function tickPop(now, dt) {
+  const p = gameState.pop;
+  gameState.effRadius = p.r;
+  gameState.targetX = p.x; gameState.targetY = p.y;
+
+  const dist = Math.hypot(lastRoll - p.x, lastPitch - p.y);
+  const inside = dist <= p.r;
+  if (inside !== gameState.inside && now - gameState.lastCrossBeepMs > 250) {
+    beep(inside ? 523 : 220, 90);
+    gameState.lastCrossBeepMs = now;
+  }
+  gameState.inside = inside;
+  gameState.totalScoringMs += dt * 1000;
+  gameState.roundTotMs     += dt * 1000;
+  gameState.flowEMA += ((inside ? 1 : 0) - gameState.flowEMA) * Math.min(1, dt / FLOW_TAU_S);
+
+  if (inside) {
+    gameState.timeInZoneMs += dt * 1000;
+    gameState.roundInMs    += dt * 1000;
+    p.holdMs += dt * 1000;
+  } else {
+    p.holdMs = Math.max(0, p.holdMs - dt * 2000);  // drains 2× as fast
+  }
+  p.idleMs += dt * 1000;
+
+  if (p.holdMs >= POP_HOLD_S * 1000) {
+    // POP!
+    const pts = Math.round(POP_PTS_BASE * (POP_START_R / p.r));
+    gameState.score += pts;
+    gameState.streak++;
+    spawnBurst(p.x, p.y, p.r, '#4ade80', 16, false);
+    spawnPopup(`+${pts}`, p.x, p.y + p.r + 1.5, '#4ade80', 14);
+    if (gameState.streak >= 2) {
+      spawnPopup(`×${gameState.streak} STREAK`, p.x, p.y - p.r - 2.5, '#fbbf24', 12);
+    }
+    beep(880, 110);
+    gameState.smallestRing = Math.min(gameState.smallestRing, p.r);
+    checkPromotion(gameState.smallestRing);
+    p.r = Math.max(POP_MIN_R, p.r * 0.88);
+    p.reach = Math.min(11, p.reach + 0.5);
+    respawnPopTarget();
+  } else if (p.idleMs >= POP_TIMEOUT_S * 1000) {
+    // Too hard — bring the next one closer and bigger.
+    gameState.streak = 0;
+    p.r = Math.min(POP_MAX_R, p.r * 1.25);
+    p.reach = Math.max(4, p.reach - 1.5);
+    spawnPopup('CLOSER ONE!', p.x, p.y, '#60a5fa', 12);
+    respawnPopTarget();
+  }
+
+  gameState.gN++;
+  gameState.gSumR  += lastRoll;        gameState.gSumP  += lastPitch;
+  gameState.gSumR2 += lastRoll ** 2;   gameState.gSumP2 += lastPitch ** 2;
+
+  updateLiveRank();
+
+  droneUpdate(dist / (p.r * 2));
+
+  $('g-ring').textContent = `target ±${p.r.toFixed(1)}cm`;
+  $('g-best').textContent = isFinite(gameState.smallestRing)
+    ? `±${gameState.smallestRing.toFixed(1)}cm` : '–';
+}
+
+// Direction-of-sway summary from play-time mean roll/pitch. Plot convention:
+// pitch+ = forward (up on the plot), roll+ = right.
+function driftSummary() {
+  if (gameState.gN < 10) return null;
+  const mR = gameState.gSumR / gameState.gN;
+  const mP = gameState.gSumP / gameState.gN;
+  const rmsML = Math.sqrt(gameState.gSumR2 / gameState.gN); // side-to-side
+  const rmsAP = Math.sqrt(gameState.gSumP2 / gameState.gN); // fwd-back
+  const THR = 0.35;
+  const f = mP > THR, b = mP < -THR, r = mR > THR, l = mR < -THR;
+  let label = 'centered', arrow = '·';
+  if (f || b || r || l) {
+    label = (f ? 'forward' : b ? 'back' : '') +
+            ((f || b) && (r || l) ? '-' : '') +
+            (r ? 'right' : l ? 'left' : '');
+    arrow = f ? (r ? '↗' : l ? '↖' : '↑')
+          : b ? (r ? '↘' : l ? '↙' : '↓')
+          : (r ? '→' : '←');
+  }
+  return { label, arrow, rmsML, rmsAP };
+}
+
+function finishGame() {
+  if (gameState.phase === 'done' || gameState.phase === 'idle') return;
+  // If we got here mid-round (manual Stop), capture the partial round.
+  if (gameState.phase === 'playing' && gameState.roundTotMs > 0 &&
+      gameState.roundStats.length <= gameState.roundIndex) {
+    gameState.roundStats.push({ inMs: gameState.roundInMs, totMs: gameState.roundTotMs });
+  }
+  droneStop();
+  setPhase('done', 'var(--blue)');
+  $('g-mode').disabled = false;
+  renderModeCards();
+  gameState.targetX = 0; gameState.targetY = 0;
+
+  const score    = Math.round(gameState.score);
+  const smallest = isFinite(gameState.smallestRing) ? gameState.smallestRing : NaN;
+  const pct      = gameState.totalScoringMs > 0
+                     ? (100 * gameState.timeInZoneMs / gameState.totalScoringMs) : 0;
+  const rating   = rateSkill(score, isFinite(smallest) ? smallest : 99);
+  const drift    = driftSummary();
+
+  // Compare against history BEFORE saving this session.
+  const history   = loadHistory();
+  const prev      = history.length ? history[history.length - 1] : null;
+  const prevRings = history.map(e => e.smallest).filter(v => isFinite(v) && v != null);
+  const prevBest  = prevRings.length ? Math.min(...prevRings) : Infinity;
+  const isNewBest = isFinite(smallest) && smallest < prevBest && history.length > 0;
+
+  // Celebration overlay on the canvas.
+  celebration.active  = true;
+  celebration.t0      = performance.now();
+  celebration.score   = score;
+  celebration.rankIdx = isFinite(smallest) ? rankForRing(smallest) : RANKS.length - 1;
+  celebration.stars   = gameState.roundStats.map(s => starsFor(s.inMs, s.totMs));
+  celebration.newBest = isNewBest;
+  celebration.subline = (isFinite(smallest) ? `smallest ±${smallest.toFixed(1)}cm · ` : '') +
+                        `${pct.toFixed(0)}% in zone`;
+  if (isNewBest) spawnConfetti();
+
+  // Lead with the ring (the metric a 50+ user can feel), score second.
+  let html = '';
+  html += `<div>Smallest ring: <strong>±${isFinite(smallest) ? smallest.toFixed(1) : '–'}cm</strong>`;
+  if (prev && isFinite(prev.smallest) && prev.smallest != null && isFinite(smallest)) {
+    const d = 100 * (prev.smallest - smallest) / prev.smallest;
+    html += d > 1
+      ? `<span class="g-delta-good">${d.toFixed(0)}% tighter than last time</span>`
+      : (d < -1 ? `<span class="g-delta-bad">${(-d).toFixed(0)}% wider than last time</span>` : '');
+  }
+  if (isNewBest) html += ` <span class="g-best-badge">★ new best</span>`;
+  html += `</div>`;
+  html += `<div>Score: <strong>${score.toLocaleString()}</strong></div>`;
+  html += `<div>Time in zone: <strong>${pct.toFixed(0)}%</strong></div>`;
+  html += `<div>Rating: <strong>${rating}</strong></div>`;
+  if (isGuest()) {
+    html += `<div style="color:var(--text3);">Guest game — not saved to history</div>`;
+  }
+  if (drift) {
+    html += `<div>Drift: <strong>${drift.arrow} ${drift.label}</strong></div>`;
+    html += `<div>Sway RMS: <strong>${drift.rmsML.toFixed(1)}cm</strong> side · <strong>${drift.rmsAP.toFixed(1)}cm</strong> fwd-back</div>`;
+  }
+  const qualifies = gameState.totalScoringMs >= MIN_SAVE_SCORING_S * 1000 &&
+                    lbQualifies(score, gameState.mode);
+  let guestLB = false;
+  if (qualifies) {
+    if (!isGuest()) {
+      // Named players go on the board automatically — no initials ritual.
+      const name = players.current.slice(0, 8);
+      addLB(name, score, isFinite(smallest) ? +smallest.toFixed(2) : null, gameState.mode);
+      const board = lbBoardForGame();
+      const pos = board.findIndex(e => e.i === name && e.score === score) + 1;
+      const boardLbl = gameState.daily ? "today's Daily Challenge"
+                                       : GAME_MODES[gameState.mode].label;
+      html += `<div>Leaderboard: <strong>#${pos > 0 ? pos : '–'}</strong>` +
+              `<span style="color:var(--text3);font-size:12px;"> in ${boardLbl}</span></div>`;
+      if (pos === 1) spawnPopup('TOP OF THE BOARD!', 0, 8, '#fbbf24', 15);
+    } else {
+      guestLB = true;
+      html += `<div id="lb-entry">Leaderboard: <input id="lb-init" maxlength="3" placeholder="AAA"> ` +
+              `<button id="lb-save">Save</button></div>`;
+    }
+  }
+  $('g-final').style.display = 'flex';
+  $('g-final').innerHTML = html;
+  if (guestLB) {
+    $('lb-save').addEventListener('click', () => {
+      const init = ($('lb-init').value || '???').toUpperCase().slice(0, 3).padEnd(3, '·');
+      addLB(init, score, isFinite(smallest) ? +smallest.toFixed(2) : null);
+      $('lb-entry').innerHTML = `On the board: <strong>${init}</strong>`;
+      beep(1047, 150);
+    });
+  }
+
+  // Persist — but skip aborted games so a 4 s false start doesn't become
+  // tomorrow's "personalised" starting ring.
+  if (gameState.totalScoringMs >= MIN_SAVE_SCORING_S * 1000) {
+    saveHistoryEntry({
+      t: new Date().toISOString(),
+      mode: gameState.mode,
+      stance: gameState.stance,
+      daily: gameState.daily || undefined,
+      score,
+      smallest: isFinite(smallest) ? +smallest.toFixed(2) : null,
+      pct: +pct.toFixed(0),
+      rating,
+      endRing: +(GAME_MODES[gameState.mode].kind === 'pop'
+                   ? gameState.pop.r : gameState.currentRadius).toFixed(2),
+    });
+  }
+
+  beep(523, 120); setTimeout(() => beep(659, 120), 140); setTimeout(() => beep(784, 200), 280);
+  log(`Game over. Score ${score}, smallest ±${isFinite(smallest) ? smallest.toFixed(1) : '–'}cm, ` +
+      `${pct.toFixed(0)}% in zone${drift ? ', drift ' + drift.label : ''}.`, 'ok');
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Session recording state. Metrics only accumulate while `recording` is true.
+// Stop freezes everything and autosaves a CSV. Zero resets the world.
+// ───────────────────────────────────────────────────────────────────────────
+let recording      = false;
+let sessionStartMs = 0;
+let timerHandle    = null;
+
+let sampleCount  = 0;
+let peakTilt     = 0;
+let sumTilt      = 0;
+let swayPath     = 0;
+let prevRecRoll  = null;
+let prevRecPitch = null;
+let csvRows      = [];
+
+// Hero button doubles as the connect gate: disconnected → CONNECT BOARD,
+// connected + idle → PLAY. End button only exists while a game is running.
+function updateHero() {
+  const play = $('btn-record'), end = $('btn-stop');
+  play.style.display = recording ? 'none' : '';
+  end.style.display  = recording ? '' : 'none';
+  play.disabled = recording;
+  end.disabled  = !recording;
+  play.textContent = connected ? '▶  PLAY' : '🔗  CONNECT PLATE';
+}
+
+function setRecordingButtons() {
+  $('btn-zero').disabled = !connected;
+  updateHero();
+}
+
+$('btn-record').addEventListener('click', async () => {
+  if (recording) return;
+  if (!connected) { connectBoard(); return; }
+  // Refresh only when the link is degraded RELATIVE TO ITS OWN baseline,
+  // and at most once per cooldown — never on a healthy or merely slow link.
+  if (linkDegraded() && Date.now() - lastAutoRefreshMs > AUTO_REFRESH_COOLDOWN_MS) {
+    lastAutoRefreshMs = Date.now();
+    log('Link slower than its baseline — refreshing before the game.', 'warn');
+    const okLink = await refreshLink();
+    if (!okLink) { refreshStatus(); return; }
+  }
+  startRecording();
+});
+$('btn-stop').addEventListener('click', stopRecording);
+
+function startRecording() {
+  if (recording || !connected) return;
+
+  ensureAudio();        // user gesture — safe point to unlock WebAudio
+  requestWakeLock();    // keep the screen on for the whole game
+
+  // Wipe every dashboard-side aggregate so this session starts from zero.
+  csvRows = []; sampleCount = 0; peakTilt = 0; sumTilt = 0;
+  swayPath = 0; prevRecRoll = null; prevRecPitch = null;
+  resetSwayAccumulator();
+  swayFrozen = false;
+
+  $('ss-n')   .textContent = '0';
+  $('ss-dur') .textContent = '0:00';
+  $('ss-peak').textContent = '–';
+  $('ss-avg') .textContent = '–';
+  $('ss-path').textContent = '–';
+  $('ss-vel') .textContent = '–';
+  $('ss-sway').textContent = '–';
+  $('ss-state').textContent = 'recording';
+  $('ss-state').style.color = 'var(--red)';
+
+  sessionStartMs = Date.now();
+  recording = true;
+  setRecordingButtons();
+  $('conn-dot').className = 'dot rec';
+
+  timerHandle = setInterval(() => {
+    const s = Math.floor((Date.now() - sessionStartMs) / 1000);
+    $('ss-dur').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }, 500);
+
+  startGame();
+  log('Session started', 'ok');
+}
+
+function stopRecording() {
+  if (!recording) return;
+  recording = false;
+  clearInterval(timerHandle);
+  releaseWakeLock();
+  swayFrozen = true;             // ellipse + sway area freeze on last value
+  $('ss-state').textContent = 'stopped';
+  $('ss-state').style.color = 'var(--text2)';
+  $('conn-dot').className = connected ? 'dot on' : 'dot';
+  setRecordingButtons();
+
+  finishGame();
+
+  if (!csvRows.length) { log('No samples recorded — nothing to save', 'warn'); return; }
+
+  const hdr  = 'timestamp,elapsed_s,device_ms,cop_x_cm,cop_y_cm,weight_kg,game_phase,ring_cm,inside,score\n';
+  const blob = new Blob([hdr + csvRows.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'plate_' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.csv';
+  a.click();
+  log(`Saved ${csvRows.length} samples → ${a.download}`, 'ok');
+}
+
+$('btn-zero').addEventListener('click', () => {
+  // Send firmware-side zero so the next frame is referenced from current pose.
+  sendCmd('ZERO');
+  // Abort any in-flight session — Zero is destructive, drop the CSV.
+  if (recording) {
+    recording = false;
+    clearInterval(timerHandle);
+    releaseWakeLock();
+    csvRows = [];
+    $('conn-dot').className = connected ? 'dot on' : 'dot';
+  }
+  droneStop();
+  resetAllVisualsAndAccumulators();
+  $('ss-state').textContent = 'idle';
+  $('ss-state').style.color = 'var(--text2)';
+  setRecordingButtons();
+  log('Zeroed — all metrics and visuals cleared');
+});
+
+function resetAllVisualsAndAccumulators() {
+  // Visual trail.
+  for (let i = 0; i < TRAIL_LEN; i++) { trailRoll[i] = 0; trailPitch[i] = 0; }
+  trailHead = 0; trailFull = false;
+  // Pending frame queue + device-time origin.
+  PENDING_FRAMES.length = 0;
+  haveFirstDeviceMs = false; firstDeviceMs = 0;
+  // Session accumulators + sway.
+  resetSwayAccumulator(); swayFrozen = false;
+  sampleCount = 0; peakTilt = 0; sumTilt = 0; swayPath = 0;
+  prevRecRoll = null; prevRecPitch = null;
+  // Tile values.
+  ['ss-n','ss-dur','ss-peak','ss-avg','ss-path','ss-vel','ss-sway']
+    .forEach(id => $(id).textContent = '–');
+  ['v-roll','v-pitch','v-tilt']
+    .forEach(id => $(id).textContent = '–');
+  // Chart.
+  if (chart) {
+    ['labels','roll','pitch'].forEach(k => { chartData[k].length = 0; });
+    chartDirty = true;
+  }
+  lastRoll = 0; lastPitch = 0;
+  resetGameState();
+  drawTiltPlot(0, 0);
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Mode cards UI — visual mode picker that writes into the hidden #g-mode
+// select, so all engine logic + saved preferences stay untouched.
+// ───────────────────────────────────────────────────────────────────────────
+function renderModeCards() {
+  const wrap = $('mode-cards');
+  if (!wrap) return;
+  const sel = $('g-mode');
+  const cur = GAME_MODES[sel.value] ? sel.value : DEFAULT_MODE;
+  // When the daily challenge is selected, no kind card is highlighted —
+  // the daily banner carries the selection instead.
+  const curKind = dailyActive ? null : GAME_MODES[cur].kind;
+  wrap.className = 'mode-cards' + (sel.disabled ? ' locked' : '');
+  wrap.innerHTML = '';
+  for (const c of MODE_CARDS) {
+    const card = document.createElement('div');
+    card.className = 'mode-card' + (c.kind === curKind ? ' sel' : '');
+    if (card.style) card.style.setProperty && card.style.setProperty('--mc', c.accent);
+    let inner = `<div class="mc-icon">${c.icon}</div>` +
+                `<div class="mc-name">${c.name}</div>` +
+                `<div class="mc-desc">${c.desc}</div>`;
+    if (c.durations && c.kind === curKind) {
+      inner += `<div class="mc-chips">` + c.durations.map(([key, lbl]) =>
+        `<span class="mc-chip${key === cur ? ' sel' : ''}" data-mode="${key}">${lbl}</span>`).join('') + `</div>`;
+    }
+    card.innerHTML = inner;
+    card.addEventListener('click', (ev) => {
+      if (sel.disabled) return;
+      const chip = ev && ev.target && ev.target.getAttribute &&
+                   ev.target.getAttribute('data-mode');
+      sel.value = chip || (c.kind === curKind ? cur : c.defaultMode);
+      dailyActive = false;                 // picking a mode leaves the daily
+      renderDailyCard();
+      savePrefs();
+      renderModeCards();
+      renderMainLB();
+      drawTiltPlot(lastRoll, lastPitch);   // idle pulse picks up the accent
+    });
+    wrap.appendChild(card);
+  }
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Chart.js tilt-vs-time, 20 Hz redraw cap.
+// ───────────────────────────────────────────────────────────────────────────
+const MAX_CHART = 500;             // ~5 s at the firmware's 100 Hz output
+const chartData = { labels: [], roll: [], pitch: [] };
+let   chart      = null;
+let   chartDirty = false;
+let   chartLastDrawMs = 0;
+const CHART_REDRAW_MS = 50;
+
+function initChart() {
+  chart = new Chart($('timeChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: chartData.labels,
+      datasets: [
+        { label: 'Roll',  data: chartData.roll,  borderColor: '#60a5fa', borderWidth: 1.5, pointRadius: 0, tension: .3 },
+        { label: 'Pitch', data: chartData.pitch, borderColor: '#4ade80', borderWidth: 1.5, pointRadius: 0, tension: .3 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#55555c', font: { size: 10, family: 'IBM Plex Mono' }, maxTicksLimit: 8 },
+             grid: { color: 'rgba(255,255,255,.04)' }, border: { color: 'rgba(255,255,255,.08)' } },
+        y: { ticks: { color: '#55555c', font: { size: 10, family: 'IBM Plex Mono' } },
+             grid: { color: 'rgba(255,255,255,.04)' }, border: { color: 'rgba(255,255,255,.08)' } },
+      },
+    },
+  });
+}
+initChart();
+
+function pushChartPoint(elapsed, roll, pitch) {
+  chartData.labels.push(elapsed.toFixed(1) + 's');
+  chartData.roll  .push(roll);
+  chartData.pitch .push(pitch);
+  if (chartData.labels.length > MAX_CHART) {
+    chartData.labels.shift();
+    chartData.roll .shift(); chartData.pitch.shift();
+  }
+  chartDirty = true;
+}
+
+// chart.update() does layout work even on a hidden canvas inside a collapsed
+// <details>, which steals time from the main rAF and makes the dot visibly
+// lag — so skip the update entirely when the Advanced panel is closed.
+(function chartRafLoop() {
+  requestAnimationFrame(chartRafLoop);
+  if (!chartDirty || !chart || !isAdvOpen()) return;
+  const now = performance.now();
+  if (now - chartLastDrawMs < CHART_REDRAW_MS) return;
+  chartLastDrawMs = now;
+  chartDirty = false;
+  chart.update('none');
+})();
+
+// Advanced drawer doubles as the skin switch: open → instrument arena,
+// closed → game arena. Also force one chart update when opened.
+if (advDetails) advDetails.addEventListener('toggle', () => {
+  if (advDetails.open) { chartDirty = true; }
+  rebuildStaticBackground();
+  drawTiltPlot(lastRoll, lastPitch);
+});
+$('btn-gear').addEventListener('click', () => {
+  if (!advDetails) return;
+  advDetails.open = !advDetails.open;
+  if (advDetails.open && advDetails.scrollIntoView) {
+    advDetails.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Main rAF loop — drains everything queued since the last tick, updates
+// instant tiles + trail + chart + session aggregates, and redraws the plot.
+// Sample-paced state (trail/chart/session metrics/CSV) runs once per frame,
+// not once per rAF, so a 60 Hz rAF over a 100 Hz feed cannot double-count.
+// ───────────────────────────────────────────────────────────────────────────
+(function rafLoop() {
+  requestAnimationFrame(rafLoop);
+
+  // Diagnostics: count rAF ticks and sample queue depth before draining.
+  diag.rafTicks++;
+  const qDepth = PENDING_FRAMES.length;
+  diag.queueSum += qDepth; diag.queueSamples++;
+  if (qDepth > diag.queueMax) diag.queueMax = qDepth;
+  if (qDepth > 0) {
+    // Age of the newest queued frame at draw time = how stale what we're
+    // about to show is. This is the number that matters for perceived lag.
+    diag.lastFrameAge = performance.now() - PENDING_FRAMES[qDepth - 1].arrivalMs;
+  }
+
+  // Drain pending frames in order.
+  while (PENDING_FRAMES.length > 0) {
+    const f = PENDING_FRAMES.shift();
+
+    if (!haveFirstDeviceMs) {
+      firstDeviceMs = f.deviceMs;
+      haveFirstDeviceMs = true;
+    }
+
+    // Latest values feed the live tiles + tilt-plot dot.
+    lastRoll = f.roll; lastPitch = f.pitch; lastWeight = f.weight;
+
+    // Fading trail — visual-only, regardless of recording state.
+    trailRoll[trailHead]  = f.roll;
+    trailPitch[trailHead] = f.pitch;
+    trailHead = (trailHead + 1) % TRAIL_LEN;
+    if (trailHead === 0) trailFull = true;
+
+    // Time-series chart — always live.
+    const elapsedDevS = (f.deviceMs - firstDeviceMs) / 1000;
+    pushChartPoint(elapsedDevS, f.roll, f.pitch);
+
+    // Session aggregates — only while recording, frozen on Stop.
+    if (recording && !swayFrozen) {
+      swayAccumulate(f.roll, f.pitch);
+
+      sampleCount++;
+      const fTilt = Math.hypot(f.roll, f.pitch);
+      if (fTilt > peakTilt) peakTilt = fTilt;
+      sumTilt += fTilt;
+      if (prevRecRoll !== null) {
+        swayPath += Math.hypot(f.roll - prevRecRoll, f.pitch - prevRecPitch);
+      }
+      prevRecRoll = f.roll; prevRecPitch = f.pitch;
+
+      // Record CSV row — game columns make post-hoc analysis of the
+      // adaptation (ring size vs sway vs phase) possible from the CSV alone.
+      const sessionElapsedS = (Date.now() - sessionStartMs) / 1000;
+      csvRows.push([
+        new Date().toISOString(),
+        sessionElapsedS.toFixed(3),
+        f.deviceMs,
+        f.roll.toFixed(4),
+        f.pitch.toFixed(4),
+        f.weight.toFixed(4),
+        gameState.phase,
+        gameState.effRadius > 0 ? gameState.effRadius.toFixed(2) : '',
+        gameState.phase === 'playing' ? (gameState.inside ? 1 : 0) : '',
+        gameState.score.toFixed(1),
+      ].join(','));
+    }
+  }
+
+  // Game tick — runs once per rAF using the freshest roll/pitch.
+  tickGame();
+
+  // Skip the v-* / ss-* DOM writes when Advanced is collapsed — those tiles
+  // are display:none, so the textContent updates would only burn rAF time
+  // without anyone seeing them. The values are recomputed from gameState /
+  // accumulators on the next tick after the panel is opened, so there's no
+  // data loss.
+  if (isAdvOpen()) {
+    const tilt = Math.hypot(lastRoll, lastPitch);
+    $('v-roll') .textContent = lastRoll .toFixed(2);
+    $('v-pitch').textContent = lastPitch.toFixed(2);
+    $('v-tilt') .textContent = tilt     .toFixed(2);
+
+    if (recording && !swayFrozen) {
+      const durS = (Date.now() - sessionStartMs) / 1000;
+      $('ss-n')   .textContent = sampleCount.toString();
+      $('ss-peak').textContent = peakTilt.toFixed(2);
+      $('ss-avg') .textContent = sampleCount > 0 ? (sumTilt / sampleCount).toFixed(2) : '–';
+      $('ss-path').textContent = swayPath.toFixed(2);
+      $('ss-vel') .textContent = durS > 0 ? (swayPath / durS).toFixed(2) : '–';
+      const e = computeSwayEllipse();
+      $('ss-sway').textContent = e ? e.area.toFixed(2) : '–';
+    }
+  }
+
+  drawTiltPlot(lastRoll, lastPitch);
+})();
+
+// ───────────────────────────────────────────────────────────────────────────
+// Diagnostics readout — recompute + render every 500 ms from the rolling
+// arrival/queue stats. Tells us decisively whether dot lag is data-side
+// (BLE batching, queue backup) or render-side.
+// ───────────────────────────────────────────────────────────────────────────
+function median(arr) {
+  if (!arr.length) return 0;
+  const s = [...arr].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+function mean(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
+
+let diagLastMs = performance.now();
+setInterval(() => {
+  if (!isAdvOpen()) return;
+  const now = performance.now();
+  const winS = (now - diagLastMs) / 1000;
+  diagLastMs = now;
+
+  if (!connected || diag.framesRecv === 0) {
+    ['d-hz','d-gap','d-queue','d-burst','d-dev','d-age','d-raf'].forEach(id => $(id).textContent = '–');
+    $('d-verdict').textContent = connected ? 'no data' : 'disconnected';
+    diag.framesRecv = 0; diag.rafTicks = 0;
+    diag.queueSum = 0; diag.queueSamples = 0; diag.queueMax = 0;
+    return;
+  }
+
+  const hz       = diag.framesRecv / winS;
+  const rafHz    = diag.rafTicks   / winS;
+  const gapAvg   = mean(diag.arrivalGaps);
+  const gapMax   = diag.arrivalGaps.length ? Math.max(...diag.arrivalGaps) : 0;
+  const gapMed   = median(diag.arrivalGaps);
+  const devAvg   = mean(diag.deviceGaps);
+  const qAvg     = diag.queueSamples ? diag.queueSum / diag.queueSamples : 0;
+  const qMax     = diag.queueMax;
+  const burstThr = gapMed * 2;
+  const bursts   = diag.arrivalGaps.filter(g => g > burstThr).length;
+  const burstPct = diag.arrivalGaps.length ? 100 * bursts / diag.arrivalGaps.length : 0;
+
+  $('d-hz')   .textContent = hz.toFixed(0);
+  $('d-gap')  .textContent = `${gapAvg.toFixed(0)} / ${gapMax.toFixed(0)}`;
+  $('d-queue').textContent = `${qAvg.toFixed(1)} / ${qMax}`;
+  $('d-burst').textContent = `${burstPct.toFixed(0)}%`;
+  $('d-dev')  .textContent = devAvg.toFixed(1);
+  $('d-age')  .textContent = diag.lastFrameAge.toFixed(0);
+  $('d-raf')  .textContent = rafHz.toFixed(0);
+
+  // Verdict heuristic.
+  const sendHz = devAvg > 0 ? 1000 / devAvg : 0;
+  let verdict, color;
+  if (gapMax > 80 || burstPct > 15) {
+    verdict = 'BLE batching — data arrives in bursts'; color = 'var(--red)';
+  } else if (qAvg > 2 || qMax > 6) {
+    verdict = 'Queue backing up — drain/render too slow'; color = 'var(--amber)';
+  } else if (rafHz < 45) {
+    verdict = 'Low rAF rate — render bound'; color = 'var(--amber)';
+  } else if (sendHz > 0 && hz < sendHz * 0.8) {
+    verdict = 'Frames dropping in transit'; color = 'var(--amber)';
+  } else {
+    verdict = 'Pipeline healthy'; color = 'var(--green)';
+  }
+  $('d-verdict').textContent = verdict;
+  $('d-verdict').style.color = color;
+
+  // Reset per-window counters.
+  diag.framesRecv = 0; diag.rafTicks = 0;
+  diag.queueSum = 0; diag.queueSamples = 0; diag.queueMax = 0;
+}, 500);
+
+// ───────────────────────────────────────────────────────────────────────────
+// Boot: populate the (hidden) mode select, restore preferences, render the
+// mode cards, history + idle attract info.
+// ───────────────────────────────────────────────────────────────────────────
+(function boot() {
+  // Players: load the store, or migrate a legacy single-history install into
+  // a 'PLAYER 1' profile so nobody's progress is lost by this update.
+  const stored = loadPlayersStore();
+  if (stored) {
+    players = stored;
+  } else {
+    players = { current: 'PLAYER 1', names: ['PLAYER 1'] };
+    try {
+      const legacy = localStorage.getItem(HISTORY_KEY);
+      if (legacy) {
+        localStorage.setItem(HISTORY_KEY + '::PLAYER 1', legacy);
+        localStorage.removeItem(HISTORY_KEY);
+      }
+    } catch {}
+    savePlayersStore();
+  }
+  if (!isGuest() && !players.names.includes(players.current)) {
+    players.names.push(players.current);
+  }
+  $('player-name').textContent = isGuest() ? 'GUEST' : players.current;
+
+  const sel = $('g-mode');
+  for (const [key, m] of Object.entries(GAME_MODES)) {
+    const opt = document.createElement('option');
+    opt.value = key; opt.textContent = m.label;
+    sel.appendChild(opt);
+  }
+  const prefs = loadPrefs();
+  sel.value = GAME_MODES[prefs.mode] ? prefs.mode : DEFAULT_MODE;
+  soundOn = !!prefs.sound;
+  stance = prefs.stance === 'L' || prefs.stance === 'R' ? prefs.stance : 'B';
+  dailyActive = !!prefs.daily;
+  if (dailyActive) sel.value = dailyChallenge().mode;
+  setSoundButton();
+  renderModeCards();
+  renderDailyCard();
+  renderStanceRow();
+  updateHero();
+  refreshStatus();
+  updateHistorySummary();   // also refreshes idleInfo
+})();
+
+// Cloud leaderboard: initial sync + a slow poll so scores from other gym
+// devices appear without a reload.
+cloudFetchLB();
+setInterval(cloudFetchLB, 60000);
+
+// First paint.
+drawTiltPlot(0, 0);
+log('Open ⚙ Advanced for board controls, diagnostics and the instrument view.');
+</script>
+
+</body>
+</html>

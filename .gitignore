@@ -1,0 +1,13 @@
+# Arduino / arduino-cli build output
+build/
+*.bin
+*.elf
+*.hex
+*.map
+
+# Local secrets / per-machine config
+**/wifi_config.h
+
+# OS cruft
+Thumbs.db
+.DS_Store
