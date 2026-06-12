@@ -11,10 +11,13 @@ This is the sibling of [IMU-BalanceBoard](https://github.com/rohit-aroleap/IMU-B
 
 ## Repo layout
 
-| Branch | Contents |
+Single branch (`main`):
+
+| Path | Contents |
 |---|---|
-| `main` | `FerraForcePlate/` (ESP32 Arduino sketch) + `dashboard/index.html` (game source) + this README |
-| `gh-pages` | `index.html` — the deployed game, served at the live URL below |
+| `FerraForcePlate/` | ESP32 Arduino sketch (firmware) |
+| `docs/index.html` | the game — served by GitHub Pages (Settings → Pages → branch `main`, folder `/docs`) |
+| `README.md` | this file |
 
 - **Live game:** https://rohit-aroleap.github.io/Ferra-ForcePlate/
 
@@ -71,7 +74,7 @@ copY = (plateH/2) · ((FL+FR) − (BL+BR)) / ΣF     // +y = lean forward
 
 reported in **cm**, lightly EMA-smoothed on-device. The game plot is **±12 cm**; the ring/score constants are the IMU board's proportions rescaled ×0.4 (degrees → cm). Because the score rate is a ratio (`SCORE_REF / radius`), the rescale preserves the difficulty and scoring curve exactly — leaderboard scores stay comparable in meaning.
 
-**These cm values are first-guess and meant to be tuned on the physical plate.** The knobs live together near the top of the game-logic block in `dashboard/index.html`:
+**These cm values are first-guess and meant to be tuned on the physical plate.** The knobs live together near the top of the game-logic block in `docs/index.html`:
 
 - `maxAngle` (plot half-size, cm)
 - `START_RING_DEG`, `MIN_RING_DEG`, `MAX_RING_DEG`, `SCORE_REF_DEG` (ring sizes, cm — names keep the `_DEG` suffix to avoid churn; read them as cm)
