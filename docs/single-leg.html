@@ -547,7 +547,7 @@ function updateEgg(dt) {
   }
   if (egg.state!=='play') return;
 
-  const groundY = F.y+F.h-26, catchY = F.y+F.h-64;
+  const groundY = F.y+F.h-26, catchY = F.y+F.h-72;   // ≈ the turtle's raised hands
 
   if (!egg.active && now() >= egg.spawnAt) {
     egg.active=true; egg.eLane = Math.random()<0.5 ? 'L' : 'R';
@@ -577,24 +577,64 @@ function endEgg() {
   renderResults();
 }
 
+function drawHeart(x,y,s,a) {
+  cx.save(); cx.fillStyle='rgba(244,114,114,'+a+')';
+  cx.beginPath(); cx.arc(x-s*0.5,y,s*0.5,0,2*Math.PI); cx.arc(x+s*0.5,y,s*0.5,0,2*Math.PI); cx.fill();
+  cx.beginPath(); cx.moveTo(x-s,y+s*0.15); cx.lineTo(x+s,y+s*0.15); cx.lineTo(x,y+s*1.2); cx.closePath(); cx.fill();
+  cx.restore();
+}
+
+// Front-facing mascot turtle: green shell body, yellow segmented belly,
+// big eyes + rosy cheeks + open smile, arms raised to catch.
 function drawTurtle(x, groundY) {
-  cx.save(); cx.translate(x, groundY);
+  cx.save(); cx.translate(x, groundY); cx.lineJoin='round';
+  const G='#22c55e', GD='#0b3d22', SH='#16a34a';
+
   // feet
   cx.fillStyle='#15803d';
-  [-22,-9,9,22].forEach(fx => { cx.beginPath(); cx.ellipse(fx,-3,7,5,0,0,2*Math.PI); cx.fill(); });
+  cx.beginPath(); cx.ellipse(-15,-5,9,6,0,0,2*Math.PI); cx.fill();
+  cx.beginPath(); cx.ellipse(15,-5,9,6,0,0,2*Math.PI); cx.fill();
+
+  // arms raised (catching pose)
+  cx.fillStyle=G; cx.strokeStyle=GD; cx.lineWidth=2;
+  cx.save(); cx.translate(-30,-46); cx.rotate(-0.55); cx.beginPath(); cx.ellipse(0,0,8,15,0,0,2*Math.PI); cx.fill(); cx.stroke(); cx.restore();
+  cx.save(); cx.translate(30,-46);  cx.rotate(0.55);  cx.beginPath(); cx.ellipse(0,0,8,15,0,0,2*Math.PI); cx.fill(); cx.stroke(); cx.restore();
+
+  // shell body (green outer)
+  cx.fillStyle=SH; cx.strokeStyle=GD; cx.lineWidth=2.5;
+  cx.beginPath(); cx.ellipse(0,-34,32,30,0,0,2*Math.PI); cx.fill(); cx.stroke();
+
+  // plastron (yellow belly) + segments
+  cx.fillStyle='#fcd34d'; cx.strokeStyle='#d99a1c'; cx.lineWidth=2;
+  cx.beginPath(); cx.ellipse(0,-32,21,24,0,0,2*Math.PI); cx.fill(); cx.stroke();
+  cx.strokeStyle='rgba(176,120,20,.55)'; cx.lineWidth=1.4;
+  cx.beginPath(); cx.moveTo(0,-54); cx.lineTo(0,-10); cx.stroke();
+  [-44,-32,-20].forEach(yy => { cx.beginPath(); cx.moveTo(-18,yy); cx.lineTo(18,yy); cx.stroke(); });
+
   // head
-  cx.fillStyle='#22c55e'; cx.beginPath(); cx.ellipse(0,-30,10,9,0,0,2*Math.PI); cx.fill();
-  cx.fillStyle='#0b1f12'; cx.beginPath(); cx.arc(-4,-32,1.7,0,7); cx.arc(4,-32,1.7,0,7); cx.fill();
-  cx.strokeStyle='#0b1f12'; cx.lineWidth=1.2; cx.beginPath(); cx.arc(0,-29,4,0.15*Math.PI,0.85*Math.PI); cx.stroke();
-  // shell dome (upper half-ellipse)
-  cx.fillStyle='#16a34a'; cx.beginPath(); cx.ellipse(0,-14,28,22,0,Math.PI,2*Math.PI); cx.fill();
-  cx.strokeStyle='#0b1f12'; cx.lineWidth=1.6; cx.stroke();
-  cx.beginPath(); cx.moveTo(-28,-14); cx.lineTo(28,-14); cx.stroke();
-  // scutes
-  cx.fillStyle='#15803d';
-  cx.beginPath(); cx.ellipse(0,-23,7,6,0,0,2*Math.PI); cx.fill();
-  cx.beginPath(); cx.ellipse(-13,-15,6,5,0,0,2*Math.PI); cx.fill();
-  cx.beginPath(); cx.ellipse(13,-15,6,5,0,0,2*Math.PI); cx.fill();
+  cx.fillStyle=G; cx.strokeStyle=GD; cx.lineWidth=2.5;
+  cx.beginPath(); cx.ellipse(0,-72,19,18,0,0,2*Math.PI); cx.fill(); cx.stroke();
+
+  // cheeks
+  cx.fillStyle='rgba(244,114,114,.6)';
+  cx.beginPath(); cx.ellipse(-11,-67,4.5,3.5,0,0,2*Math.PI); cx.fill();
+  cx.beginPath(); cx.ellipse(11,-67,4.5,3.5,0,0,2*Math.PI); cx.fill();
+
+  // eyes (big, sparkly)
+  cx.fillStyle='#fff';
+  cx.beginPath(); cx.ellipse(-7,-75,5.2,6.2,0,0,2*Math.PI); cx.fill();
+  cx.beginPath(); cx.ellipse(7,-75,5.2,6.2,0,0,2*Math.PI); cx.fill();
+  cx.fillStyle='#0b1f12';
+  cx.beginPath(); cx.arc(-6,-74,2.7,0,7); cx.fill();
+  cx.beginPath(); cx.arc(8,-74,2.7,0,7); cx.fill();
+  cx.fillStyle='#fff';
+  cx.beginPath(); cx.arc(-4.6,-76,1.1,0,7); cx.fill();
+  cx.beginPath(); cx.arc(9.4,-76,1.1,0,7); cx.fill();
+
+  // open happy smile
+  cx.fillStyle='#7f1d1d';
+  cx.beginPath(); cx.arc(0,-66,5,0,Math.PI); cx.fill();
+
   cx.restore();
 }
 
@@ -628,10 +668,11 @@ function drawEgg(W,H) {
 
   drawTurtle(egg.turtleX, groundY);
 
-  if (egg.sparkle && now()-egg.sparkle < 360) {               // catch +1
-    const a = 1-(now()-egg.sparkle)/360;
-    cx.fillStyle='rgba(74,222,128,'+a+')'; cx.font='700 16px Outfit'; cx.textAlign='center';
-    cx.fillText('+1', egg.sparkleX, groundY-58-(1-a)*16);
+  if (egg.sparkle && now()-egg.sparkle < 420) {               // catch: +1 and a floating heart
+    const a = 1-(now()-egg.sparkle)/420, rise=(1-a)*20;
+    cx.fillStyle='rgba(74,222,128,'+a+')'; cx.font='700 16px Outfit, sans-serif'; cx.textAlign='center';
+    cx.fillText('+1', egg.sparkleX, groundY-96-rise);
+    drawHeart(egg.sparkleX+20, groundY-100-rise, 5, a);
   }
 
   cx.textAlign='left'; cx.font='15px Outfit, sans-serif'; cx.fillStyle='rgba(248,113,113,.85)';
