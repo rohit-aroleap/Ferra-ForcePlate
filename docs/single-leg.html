@@ -262,8 +262,9 @@ $('set-gain').addEventListener('input', e => {
 });
 
 let LEAN_OFFSET = 0.12;                 // how far past centre (fraction) flips the turtle's side
-const EGG_SPEED0 = 150;                 // px/s fall speed at the start
-const EGG_GAP0   = 750;                 // ms between eggs at the start
+const EGG_SPEED0 = 100;                 // px/s fall speed at the start (gentle)
+const EGG_GAP0   = 1600;                // ms between eggs at the start (~half the old rate)
+const EGG_GAP_MIN = 300;                // fastest spawn cadence the ramp reaches
 $('set-lean').addEventListener('input', e => {
   LEAN_OFFSET = +e.target.value / 100; $('set-lean-val').textContent = e.target.value + ' %';
 });
@@ -558,9 +559,12 @@ function updateEgg(dt) {
     if (egg.eLane===egg.lane && egg.y>=catchY && egg.y<groundY) {        // caught
       egg.score++; egg.sparkle=now(); egg.sparkleX=egg.turtleX; cueCatch();
       egg.active=false; egg.spawnAt = now()+egg.gap;
-      if (egg.score % 5 === 0) {                                          // ramp → flow
-        egg.speed *= 1.07; egg.gap = Math.max(380, egg.gap*0.9); egg.level++;
-      }
+      // Continuous ramp: every catch makes the next egg a little faster and
+      // arrive a little sooner — difficulty keeps climbing while the player
+      // keeps up, until the pace finally beats them. No plateau.
+      egg.speed = Math.min(600, egg.speed * 1.035);
+      egg.gap   = Math.max(EGG_GAP_MIN, egg.gap * 0.95);
+      egg.level = Math.floor(egg.score/5) + 1;
     } else if (egg.y >= groundY) {                                       // missed
       egg.lives--; egg.splash=now(); egg.splashX=egg.x; cueFail();
       egg.active=false; egg.spawnAt = now()+egg.gap;
