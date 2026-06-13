@@ -105,6 +105,10 @@ a.back { color:var(--blue); font-size:12px; text-decoration:none; }
       <div class="lc-name">2 · Agility</div>
       <div class="lc-desc">Switch legs on the cue and hold briefly. Measures how fast you transfer.</div>
     </div>
+    <div class="level-card" data-level="3">
+      <div class="lc-name">3 · Rally</div>
+      <div class="lc-desc">Slide a paddle by shifting your weight side to side and keep the ball in play.</div>
+    </div>
   </div>
 </div>
 
@@ -141,6 +145,11 @@ a.back { color:var(--blue); font-size:12px; text-decoration:none; }
       <label>Stand sensitivity</label>
       <input type="range" id="set-thresh" min="55" max="85" step="1" value="66">
       <span class="val" id="set-thresh-val">66 %</span>
+    </div>
+    <div class="set-row">
+      <label>Paddle sensitivity (Level 3)</label>
+      <input type="range" id="set-gain" min="15" max="45" step="1" value="25">
+      <span class="val" id="set-gain-val">2.5×</span>
     </div>
     <div class="set-row hint" id="live-readout">Live: not connected.</div>
     <div class="set-row hint">Sensitivity = how far your weight must shift onto one leg to count as standing on it.
@@ -237,6 +246,11 @@ $('set-target').addEventListener('input', e => {
 $('set-thresh').addEventListener('input', e => {
   THRESH_ON = +e.target.value / 100; $('set-thresh-val').textContent = e.target.value + ' %';
 });
+let PADDLE_GAIN = 2.5;                 // weight-shift → paddle-travel multiplier
+const PADDLE_BALL_SPEED0 = 175;        // px/s at the start of a rally
+$('set-gain').addEventListener('input', e => {
+  PADDLE_GAIN = +e.target.value / 10; $('set-gain-val').textContent = PADDLE_GAIN.toFixed(1) + '×';
+});
 
 let level = 1;
 document.querySelectorAll('.level-card').forEach(c => c.addEventListener('click', () => {
@@ -269,6 +283,13 @@ const engine = {
   results:[],
 };
 
+// Level 3 — Rally paddle game. Physics run on the rAF clock (smooth ball
+// motion); the paddle X tracks the live left/right weight shift each frame.
+const paddle = {
+  state:'idle', score:0, lives:3, pw:0.26, speed:PADDLE_BALL_SPEED0,
+  smoothX:0.5, ballX:0, ballY:0, vx:0, vy:1, countStart:0, deadAt:0,
+};
+
 function legName(l){ return l==='R' ? 'RIGHT' : 'LEFT'; }
 function liftName(l){ return l==='R' ? 'LEFT' : 'RIGHT'; }   // which leg to raise to stand on l
 function onLeg(l){ return l==='R' ? live.rightFrac >= THRESH_ON : (1-live.rightFrac) >= THRESH_ON; }
@@ -286,10 +307,11 @@ function startGame() {
   if (!connected) return;
   beep(440,60);
   engine.running = true; engine.results = []; engine.idx = 0;
-  engine.rounds = buildRounds();
-  engine.phase = 'calibrate'; engine.calStart = 0;
   $('btn-start').style.display='none'; $('btn-stop').style.display='';
   $('results-card').style.display='none';
+  if (level === 3) { engine.phase = 'paddle'; startPaddle(); return; }
+  engine.rounds = buildRounds();
+  engine.phase = 'calibrate'; engine.calStart = 0;
   $('instr').textContent = 'Stand on BOTH feet, centred';
   $('sub').textContent = 'One foot each side of the line — hold still…';
 }
@@ -413,6 +435,18 @@ function finishGame() {
 function renderResults() {
   const card = $('results-card'), box = $('results');
   card.style.display = ''; box.innerHTML = '';
+  const item = (label,val) => `<div class="res-item"><div class="rl">${label}</div><div class="rv">${val}</div></div>`;
+
+  if (level === 3) {
+    $('results-title').textContent = 'Rally results';
+    let best = 0; try { best = +localStorage.getItem('ferraSL_L3') || 0; } catch {}
+    best = Math.max(best, paddle.score);
+    box.innerHTML = item('Rallies', paddle.score) + item('Best', best) +
+                    item('Top speed', (paddle.speed/PADDLE_BALL_SPEED0).toFixed(1)+'×');
+    saveBest('L3', paddle.score);
+    return;
+  }
+
   $('results-title').textContent = level===1 ? 'Endurance results' : 'Agility results';
 
   if (level === 1) {
@@ -448,10 +482,120 @@ function saveBest(key, val) {
 
 // ── Arena render loop ────────────────────────────────────────────────────────
 const cv = $('arena'), cx = cv.getContext('2d');
-function draw() {
+function field(){ const p=24; return {x:p, y:p, w:cv.width-2*p, h:cv.height-2*p}; }
+
+// ── Level 3 paddle engine ────────────────────────────────────────────────────
+function startPaddle() {
+  paddle.score=0; paddle.lives=3; paddle.pw=0.26; paddle.speed=PADDLE_BALL_SPEED0;
+  paddle.smoothX=0.5; paddle.state='count'; paddle.countStart=now();
+  serveBall();
+  $('instr').textContent='Get ready…';
+  $('sub').textContent='Shift your weight left & right to move the paddle';
+}
+function serveBall() {
+  const F=field();
+  paddle.ballX=F.x+F.w/2; paddle.ballY=F.y+F.h*0.28;
+  const ang=(Math.random()*0.5-0.25);     // small spread off vertical, heading down
+  paddle.vx=Math.sin(ang); paddle.vy=Math.cos(ang);
+}
+function showBig(html){ $('timer').innerHTML = html; }
+
+function updatePaddle(dt) {
+  const F=field(), r=9;
+  // paddle X from the weight-shift fraction, amplified and smoothed
+  const target = clamp(0.5 + (live.rightFrac-0.5)*PADDLE_GAIN, 0, 1);
+  paddle.smoothX += (target - paddle.smoothX) * clamp(dt*12, 0, 1);
+
+  if (paddle.state==='count') {
+    const left = 3 - (now()-paddle.countStart)/1000;
+    if (left<=0) { paddle.state='play'; $('instr').textContent='Keep it up!'; $('sub').textContent='Rally as long as you can'; cueGo(); }
+    else { showBig('<span>'+Math.ceil(left)+'</span>'); }
+    return;
+  }
+  if (paddle.state==='dead') {
+    if (now()-paddle.deadAt > 900) {
+      if (paddle.lives<=0) endPaddle();
+      else { paddle.state='play'; serveBall(); }
+    }
+    return;
+  }
+  if (paddle.state!=='play') return;
+
+  const v = paddle.speed;
+  paddle.ballX += paddle.vx * v * dt;
+  paddle.ballY += paddle.vy * v * dt;
+
+  if (paddle.ballX < F.x+r)       { paddle.ballX=F.x+r;       paddle.vx= Math.abs(paddle.vx); cueTick(); }
+  if (paddle.ballX > F.x+F.w-r)   { paddle.ballX=F.x+F.w-r;   paddle.vx=-Math.abs(paddle.vx); cueTick(); }
+  if (paddle.ballY < F.y+r)       { paddle.ballY=F.y+r;       paddle.vy= Math.abs(paddle.vy); cueTick(); }
+
+  const padW=F.w*paddle.pw;
+  const padCx=clamp(F.x+paddle.smoothX*F.w, F.x+padW/2, F.x+F.w-padW/2);
+  const padY=F.y+F.h-18;
+  if (paddle.vy>0 && paddle.ballY+r >= padY && paddle.ballY+r <= padY+16
+      && paddle.ballX >= padCx-padW/2-r && paddle.ballX <= padCx+padW/2+r) {
+    paddle.ballY = padY-r;
+    const off = clamp((paddle.ballX-padCx)/(padW/2), -1, 1);   // hit position → return angle
+    const ang = off*0.95;
+    paddle.vx=Math.sin(ang); paddle.vy=-Math.cos(ang);
+    paddle.score++; beep(720,70);
+    if (paddle.score % 4 === 0) paddle.speed *= 1.08;          // ramp difficulty → flow
+  }
+
+  if (paddle.ballY-r > F.y+F.h) {                              // missed
+    paddle.lives--; cueFail(); paddle.state='dead'; paddle.deadAt=now();
+  }
+  showBig(paddle.score + '<span class="u">pts</span>');
+}
+
+function endPaddle() {
+  paddle.state='over';
+  stopGame(true);
+  $('instr').textContent='Game over';
+  $('sub').textContent='Rallies: '+paddle.score;
+  renderResults();
+}
+
+function drawPaddle(W,H) {
+  const F=field();
+  cx.fillStyle='rgba(255,255,255,.03)'; roundRect(F.x,F.y,F.w,F.h,16); cx.fill();
+  cx.strokeStyle='rgba(255,255,255,.10)'; cx.lineWidth=1; cx.stroke();
+  cx.setLineDash([5,8]); cx.strokeStyle='rgba(255,255,255,.07)';
+  cx.beginPath(); cx.moveTo(W/2,F.y+8); cx.lineTo(W/2,F.y+F.h-8); cx.stroke(); cx.setLineDash([]);
+
+  const padW=F.w*paddle.pw;
+  const padCx=clamp(F.x+paddle.smoothX*F.w, F.x+padW/2, F.x+F.w-padW/2);
+  const padY=F.y+F.h-18;
+  cx.fillStyle='#4ade80'; cx.shadowColor='#4ade80'; cx.shadowBlur=12;
+  roundRect(padCx-padW/2,padY,padW,11,6); cx.fill(); cx.shadowBlur=0;
+
+  if (paddle.state==='play' || paddle.state==='dead') {
+    cx.beginPath(); cx.arc(paddle.ballX,paddle.ballY,9,0,2*Math.PI);
+    const bc = paddle.state==='dead' ? '#f87171' : '#fbbf24';
+    cx.fillStyle=bc; cx.shadowColor=bc; cx.shadowBlur=16; cx.fill(); cx.shadowBlur=0;
+  }
+
+  cx.textAlign='left'; cx.font='15px Outfit, sans-serif'; cx.fillStyle='rgba(248,113,113,.85)';
+  cx.fillText('♥'.repeat(Math.max(0,paddle.lives)), F.x+8, F.y+20);
+
+  $('bal-l').style.width=((1-live.rightFrac)*50).toFixed(1)+'%';
+  $('bal-r').style.width=(live.rightFrac*50).toFixed(1)+'%';
+}
+
+// ── Arena render loop ────────────────────────────────────────────────────────
+let lastDrawT = 0;
+function draw(ts) {
   requestAnimationFrame(draw);
+  const dt = lastDrawT ? Math.min(((ts||0)-lastDrawT)/1000, 0.05) : 0;
+  lastDrawT = ts || 0;
   const W = cv.width, H = cv.height;
   cx.clearRect(0,0,W,H);
+
+  if (level===3) {
+    if (engine.running) updatePaddle(dt);
+    drawPaddle(W,H);
+    return;
+  }
 
   // plate
   const pad=24, px=pad, py=pad, pw=W-2*pad, ph=H-2*pad;
