@@ -48,8 +48,8 @@ button:disabled { opacity:.3; cursor:not-allowed; }
 .card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r2); padding:14px 16px; margin-bottom:12px; }
 .card-title { font-size:11px; font-weight:500; letter-spacing:.08em; text-transform:uppercase; color:var(--text3); margin-bottom:10px; }
 
-.levels { display:flex; gap:8px; }
-.level-card { flex:1; background:var(--bg2); border:1px solid var(--border); border-radius:12px;
+.levels { display:flex; gap:8px; flex-wrap:wrap; }
+.level-card { flex:1 1 150px; min-width:150px; background:var(--bg2); border:1px solid var(--border); border-radius:12px;
               padding:11px 13px; cursor:pointer; transition:border-color .15s,box-shadow .2s; }
 .level-card:hover { border-color:var(--border2); }
 .level-card.sel { border-color:var(--green); box-shadow:0 0 16px rgba(74,222,128,.22); }
@@ -106,7 +106,11 @@ a.back { color:var(--blue); font-size:12px; text-decoration:none; }
       <div class="lc-desc">Switch legs on the cue and hold briefly. Measures how fast you transfer.</div>
     </div>
     <div class="level-card" data-level="3">
-      <div class="lc-name">3 · Rally</div>
+      <div class="lc-name">3 · Egg Catcher 🐢</div>
+      <div class="lc-desc">Lean left or right to slide the turtle and catch eggs on its shell. Just two positions — no balancing.</div>
+    </div>
+    <div class="level-card" data-level="4">
+      <div class="lc-name">4 · Rally</div>
       <div class="lc-desc">Slide a paddle by shifting your weight side to side and keep the ball in play.</div>
     </div>
   </div>
@@ -147,7 +151,12 @@ a.back { color:var(--blue); font-size:12px; text-decoration:none; }
       <span class="val" id="set-thresh-val">66 %</span>
     </div>
     <div class="set-row">
-      <label>Paddle sensitivity (Level 3)</label>
+      <label>Lean to flip (Level 3)</label>
+      <input type="range" id="set-lean" min="5" max="25" step="1" value="12">
+      <span class="val" id="set-lean-val">12 %</span>
+    </div>
+    <div class="set-row">
+      <label>Paddle sensitivity (Level 4)</label>
       <input type="range" id="set-gain" min="15" max="45" step="1" value="25">
       <span class="val" id="set-gain-val">2.5×</span>
     </div>
@@ -252,6 +261,13 @@ $('set-gain').addEventListener('input', e => {
   PADDLE_GAIN = +e.target.value / 10; $('set-gain-val').textContent = PADDLE_GAIN.toFixed(1) + '×';
 });
 
+let LEAN_OFFSET = 0.12;                 // how far past centre (fraction) flips the turtle's side
+const EGG_SPEED0 = 150;                 // px/s fall speed at the start
+const EGG_GAP0   = 750;                 // ms between eggs at the start
+$('set-lean').addEventListener('input', e => {
+  LEAN_OFFSET = +e.target.value / 100; $('set-lean-val').textContent = e.target.value + ' %';
+});
+
 let level = 1;
 document.querySelectorAll('.level-card').forEach(c => c.addEventListener('click', () => {
   if (engine.running) return;
@@ -290,6 +306,14 @@ const paddle = {
   smoothX:0.5, ballX:0, ballY:0, vx:0, vy:1, countStart:0, deadAt:0,
 };
 
+// Level 3 — Egg Catcher. Binary control: lean past a dead-zone to send the
+// turtle fully left or fully right (robust to the plate's low sample rate).
+const egg = {
+  state:'idle', score:0, lives:3, level:1, lane:'L', turtleX:0,
+  speed:EGG_SPEED0, gap:EGG_GAP0, active:false, x:0, y:0, eLane:'L',
+  spawnAt:0, countStart:0, splash:0, splashX:0, sparkle:0, sparkleX:0,
+};
+
 function legName(l){ return l==='R' ? 'RIGHT' : 'LEFT'; }
 function liftName(l){ return l==='R' ? 'LEFT' : 'RIGHT'; }   // which leg to raise to stand on l
 function onLeg(l){ return l==='R' ? live.rightFrac >= THRESH_ON : (1-live.rightFrac) >= THRESH_ON; }
@@ -309,7 +333,8 @@ function startGame() {
   engine.running = true; engine.results = []; engine.idx = 0;
   $('btn-start').style.display='none'; $('btn-stop').style.display='';
   $('results-card').style.display='none';
-  if (level === 3) { engine.phase = 'paddle'; startPaddle(); return; }
+  if (level === 3) { engine.phase = 'egg';    startEgg();    return; }
+  if (level === 4) { engine.phase = 'paddle'; startPaddle(); return; }
   engine.rounds = buildRounds();
   engine.phase = 'calibrate'; engine.calStart = 0;
   $('instr').textContent = 'Stand on BOTH feet, centred';
@@ -438,12 +463,20 @@ function renderResults() {
   const item = (label,val) => `<div class="res-item"><div class="rl">${label}</div><div class="rv">${val}</div></div>`;
 
   if (level === 3) {
+    $('results-title').textContent = 'Egg Catcher results';
+    let best = 0; try { best = +localStorage.getItem('ferraSL_L3eggs') || 0; } catch {}
+    best = Math.max(best, egg.score);
+    box.innerHTML = item('Eggs caught', egg.score) + item('Best', best) + item('Level', egg.level);
+    saveBest('L3eggs', egg.score);
+    return;
+  }
+  if (level === 4) {
     $('results-title').textContent = 'Rally results';
-    let best = 0; try { best = +localStorage.getItem('ferraSL_L3') || 0; } catch {}
+    let best = 0; try { best = +localStorage.getItem('ferraSL_L4') || 0; } catch {}
     best = Math.max(best, paddle.score);
     box.innerHTML = item('Rallies', paddle.score) + item('Best', best) +
                     item('Top speed', (paddle.speed/PADDLE_BALL_SPEED0).toFixed(1)+'×');
-    saveBest('L3', paddle.score);
+    saveBest('L4', paddle.score);
     return;
   }
 
@@ -484,7 +517,133 @@ function saveBest(key, val) {
 const cv = $('arena'), cx = cv.getContext('2d');
 function field(){ const p=24; return {x:p, y:p, w:cv.width-2*p, h:cv.height-2*p}; }
 
-// ── Level 3 paddle engine ────────────────────────────────────────────────────
+// ── Level 3 Egg Catcher engine ───────────────────────────────────────────────
+function laneX(l){ const F=field(); return l==='L' ? F.x+F.w*0.30 : F.x+F.w*0.70; }
+function cueCatch(){ beep(880,80); setTimeout(()=>beep(1175,95),70); }
+
+function startEgg() {
+  egg.score=0; egg.lives=3; egg.level=1;
+  egg.lane = live.rightFrac>0.5 ? 'R' : 'L'; egg.turtleX = laneX(egg.lane);
+  egg.speed=EGG_SPEED0; egg.gap=EGG_GAP0; egg.active=false; egg.splash=0; egg.sparkle=0;
+  egg.state='count'; egg.countStart=now();
+  $('instr').textContent='Get ready…';
+  $('sub').textContent='Lean left or right to move the turtle';
+}
+
+function updateEgg(dt) {
+  const F=field();
+  // Binary lane from the weight shift, with a dead-zone + hysteresis so it
+  // can't flicker near centre (and doesn't care about the low sample rate).
+  if (egg.lane==='L' && live.rightFrac > 0.5 + LEAN_OFFSET) egg.lane='R';
+  else if (egg.lane==='R' && live.rightFrac < 0.5 - LEAN_OFFSET) egg.lane='L';
+  const tx = laneX(egg.lane);
+  egg.turtleX += (tx - egg.turtleX) * clamp(dt*14, 0, 1);   // cosmetic glide
+
+  if (egg.state==='count') {
+    const left = 3 - (now()-egg.countStart)/1000;
+    if (left<=0) { egg.state='play'; egg.spawnAt=now()+400; $('instr').textContent='Catch the eggs!'; $('sub').textContent='Move the turtle under the falling egg'; cueGo(); }
+    else showBig('<span>'+Math.ceil(left)+'</span>');
+    return;
+  }
+  if (egg.state!=='play') return;
+
+  const groundY = F.y+F.h-26, catchY = F.y+F.h-64;
+
+  if (!egg.active && now() >= egg.spawnAt) {
+    egg.active=true; egg.eLane = Math.random()<0.5 ? 'L' : 'R';
+    egg.x = laneX(egg.eLane); egg.y = F.y+16;
+  }
+  if (egg.active) {
+    egg.y += egg.speed * dt;
+    if (egg.eLane===egg.lane && egg.y>=catchY && egg.y<groundY) {        // caught
+      egg.score++; egg.sparkle=now(); egg.sparkleX=egg.turtleX; cueCatch();
+      egg.active=false; egg.spawnAt = now()+egg.gap;
+      if (egg.score % 5 === 0) {                                          // ramp → flow
+        egg.speed *= 1.07; egg.gap = Math.max(380, egg.gap*0.9); egg.level++;
+      }
+    } else if (egg.y >= groundY) {                                       // missed
+      egg.lives--; egg.splash=now(); egg.splashX=egg.x; cueFail();
+      egg.active=false; egg.spawnAt = now()+egg.gap;
+      if (egg.lives<=0) { endEgg(); return; }
+    }
+  }
+  showBig(egg.score + '<span class="u">eggs</span>');
+}
+
+function endEgg() {
+  egg.state='over'; stopGame(true);
+  $('instr').textContent='Game over';
+  $('sub').textContent='Eggs caught: '+egg.score;
+  renderResults();
+}
+
+function drawTurtle(x, groundY) {
+  cx.save(); cx.translate(x, groundY);
+  // feet
+  cx.fillStyle='#15803d';
+  [-22,-9,9,22].forEach(fx => { cx.beginPath(); cx.ellipse(fx,-3,7,5,0,0,2*Math.PI); cx.fill(); });
+  // head
+  cx.fillStyle='#22c55e'; cx.beginPath(); cx.ellipse(0,-30,10,9,0,0,2*Math.PI); cx.fill();
+  cx.fillStyle='#0b1f12'; cx.beginPath(); cx.arc(-4,-32,1.7,0,7); cx.arc(4,-32,1.7,0,7); cx.fill();
+  cx.strokeStyle='#0b1f12'; cx.lineWidth=1.2; cx.beginPath(); cx.arc(0,-29,4,0.15*Math.PI,0.85*Math.PI); cx.stroke();
+  // shell dome (upper half-ellipse)
+  cx.fillStyle='#16a34a'; cx.beginPath(); cx.ellipse(0,-14,28,22,0,Math.PI,2*Math.PI); cx.fill();
+  cx.strokeStyle='#0b1f12'; cx.lineWidth=1.6; cx.stroke();
+  cx.beginPath(); cx.moveTo(-28,-14); cx.lineTo(28,-14); cx.stroke();
+  // scutes
+  cx.fillStyle='#15803d';
+  cx.beginPath(); cx.ellipse(0,-23,7,6,0,0,2*Math.PI); cx.fill();
+  cx.beginPath(); cx.ellipse(-13,-15,6,5,0,0,2*Math.PI); cx.fill();
+  cx.beginPath(); cx.ellipse(13,-15,6,5,0,0,2*Math.PI); cx.fill();
+  cx.restore();
+}
+
+function drawEggSprite(x,y) {
+  cx.save(); cx.translate(x,y);
+  cx.fillStyle='#fef3c7'; cx.strokeStyle='rgba(0,0,0,.18)'; cx.lineWidth=1;
+  cx.beginPath(); cx.ellipse(0,0,11,14,0,0,2*Math.PI); cx.fill(); cx.stroke();
+  cx.fillStyle='rgba(255,255,255,.55)'; cx.beginPath(); cx.ellipse(-3,-4,3,5,0,0,2*Math.PI); cx.fill();
+  cx.restore();
+}
+
+function drawEgg(W,H) {
+  const F=field(), groundY=F.y+F.h-26;
+  cx.fillStyle='rgba(255,255,255,.03)'; roundRect(F.x,F.y,F.w,F.h,16); cx.fill();
+  cx.strokeStyle='rgba(255,255,255,.10)'; cx.lineWidth=1; cx.stroke();
+  // lane guides
+  cx.setLineDash([5,9]); cx.strokeStyle='rgba(255,255,255,.06)';
+  [laneX('L'),laneX('R')].forEach(x => { cx.beginPath(); cx.moveTo(x,F.y+10); cx.lineTo(x,groundY); cx.stroke(); });
+  cx.setLineDash([]);
+  // sand
+  cx.fillStyle='rgba(251,191,36,.10)'; cx.fillRect(F.x+1,groundY,F.w-2,F.y+F.h-groundY-1);
+
+  if (egg.active) drawEggSprite(egg.x, egg.y);
+
+  if (egg.splash && now()-egg.splash < 360) {                 // miss crack
+    const a = 1-(now()-egg.splash)/360;
+    cx.strokeStyle='rgba(248,113,113,'+(0.7*a)+')'; cx.lineWidth=2;
+    for (let i=0;i<5;i++){ const ang=i/5*2*Math.PI; cx.beginPath(); cx.moveTo(egg.splashX,groundY);
+      cx.lineTo(egg.splashX+Math.cos(ang)*14*(1.2-a), groundY+Math.sin(ang)*8*(1.2-a)); cx.stroke(); }
+  }
+
+  drawTurtle(egg.turtleX, groundY);
+
+  if (egg.sparkle && now()-egg.sparkle < 360) {               // catch +1
+    const a = 1-(now()-egg.sparkle)/360;
+    cx.fillStyle='rgba(74,222,128,'+a+')'; cx.font='700 16px Outfit'; cx.textAlign='center';
+    cx.fillText('+1', egg.sparkleX, groundY-58-(1-a)*16);
+  }
+
+  cx.textAlign='left'; cx.font='15px Outfit, sans-serif'; cx.fillStyle='rgba(248,113,113,.85)';
+  cx.fillText('♥'.repeat(Math.max(0,egg.lives)), F.x+8, F.y+20);
+  cx.textAlign='right'; cx.fillStyle='rgba(255,255,255,.6)'; cx.font='600 14px Outfit, sans-serif';
+  cx.fillText('Lv '+egg.level, F.x+F.w-8, F.y+20);
+
+  $('bal-l').style.width=((1-live.rightFrac)*50).toFixed(1)+'%';
+  $('bal-r').style.width=(live.rightFrac*50).toFixed(1)+'%';
+}
+
+// ── Level 4 paddle engine ────────────────────────────────────────────────────
 function startPaddle() {
   paddle.score=0; paddle.lives=3; paddle.pw=0.26; paddle.speed=PADDLE_BALL_SPEED0;
   paddle.smoothX=0.5; paddle.state='count'; paddle.countStart=now();
@@ -592,6 +751,11 @@ function draw(ts) {
   cx.clearRect(0,0,W,H);
 
   if (level===3) {
+    if (engine.running) updateEgg(dt);
+    drawEgg(W,H);
+    return;
+  }
+  if (level===4) {
     if (engine.running) updatePaddle(dt);
     drawPaddle(W,H);
     return;
