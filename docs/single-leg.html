@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ferra Balance — Single-Leg Stand</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0f0f12; --bg2:#18181d; --bg3:#23232a; --bg4:#2a2a32;
+  --border:rgba(255,255,255,.10); --border2:rgba(255,255,255,.14);
+  --text:#f5f5f7; --text2:#a1a1a6; --text3:#55555c;
+  --green:#4ade80; --red:#f87171; --amber:#fbbf24; --blue:#60a5fa;
+  --green-bg:rgba(74,222,128,.1); --red-bg:rgba(248,113,113,.1);
+  --amber-bg:rgba(251,191,36,.1); --blue-bg:rgba(96,165,250,.1);
+  --r:6px; --r2:10px;
+  --font:'IBM Plex Sans',sans-serif; --mono:'IBM Plex Mono',monospace; --display:'Outfit',sans-serif;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+html { background:var(--bg); color:var(--text); font-family:var(--font); font-size:14px; }
+body { max-width:680px; margin:0 auto; padding:14px 16px 28px;
+       background:radial-gradient(900px 600px at 50% -160px,#16221c 0%,var(--bg) 60%) fixed; }
+
+.topbar { display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+.brand { font-family:var(--display); font-weight:800; font-size:19px; letter-spacing:.05em; }
+.brand b { color:var(--green); } .brand span { color:var(--text); font-weight:600; }
+.spacer { flex:1; }
+.pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:500;
+        padding:4px 10px; border-radius:20px; background:var(--bg3); border:1px solid var(--border); color:var(--text2); }
+.dot { width:7px; height:7px; border-radius:50%; background:var(--text3); }
+.dot.on { background:var(--green); box-shadow:0 0 6px var(--green); }
+
+button { font-family:var(--font); font-size:13px; font-weight:500; padding:8px 16px;
+         border-radius:var(--r); border:1px solid var(--border2); background:var(--bg3);
+         color:var(--text); cursor:pointer; transition:background .15s,opacity .15s; }
+button:hover { background:var(--bg4); } button:active { opacity:.75; }
+button:disabled { opacity:.3; cursor:not-allowed; }
+.btn-green { background:var(--green-bg); border-color:rgba(74,222,128,.3); color:var(--green); }
+.btn-green:hover { background:rgba(74,222,128,.18); }
+.btn-red { background:var(--red-bg); border-color:rgba(248,113,113,.3); color:var(--red); }
+.btn-hero { font-family:var(--display); font-weight:700; font-size:16px; letter-spacing:.05em;
+            padding:13px 40px; border-radius:999px; border:none;
+            background:linear-gradient(180deg,#34d399,#16a34a); color:#062b18;
+            box-shadow:0 0 24px rgba(74,222,128,.28); }
+.btn-hero:disabled { box-shadow:none; opacity:.35; }
+
+.card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r2); padding:14px 16px; margin-bottom:12px; }
+.card-title { font-size:11px; font-weight:500; letter-spacing:.08em; text-transform:uppercase; color:var(--text3); margin-bottom:10px; }
+
+.levels { display:flex; gap:8px; }
+.level-card { flex:1; background:var(--bg2); border:1px solid var(--border); border-radius:12px;
+              padding:11px 13px; cursor:pointer; transition:border-color .15s,box-shadow .2s; }
+.level-card:hover { border-color:var(--border2); }
+.level-card.sel { border-color:var(--green); box-shadow:0 0 16px rgba(74,222,128,.22); }
+.level-card .lc-name { font-family:var(--display); font-weight:700; font-size:14px; }
+.level-card.sel .lc-name { color:var(--green); }
+.level-card .lc-desc { font-size:11.5px; color:var(--text2); line-height:1.35; margin-top:3px; }
+
+.arena-card { display:flex; flex-direction:column; align-items:center; gap:6px; padding:16px;
+              border-radius:18px; background:linear-gradient(180deg,rgba(74,222,128,.04),rgba(0,0,0,0)),var(--bg2); }
+#arena { display:block; border-radius:14px; max-width:100%; height:auto; touch-action:none; }
+
+.instr { font-family:var(--display); font-weight:700; font-size:22px; letter-spacing:.02em;
+         text-align:center; min-height:30px; margin-top:4px; }
+.sub   { font-size:13px; color:var(--text2); text-align:center; min-height:18px; }
+.timer { font-family:var(--mono); font-weight:500; font-size:44px; line-height:1; margin:2px 0; }
+.timer .u { font-size:18px; color:var(--text3); }
+
+.results { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.res-item { background:var(--bg3); border-radius:10px; padding:10px 12px; text-align:center; }
+.res-item .rl { font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--text3); }
+.res-item .rv { font-family:var(--mono); font-size:20px; margin-top:4px; }
+
+.bal-wrap { display:flex; align-items:center; gap:10px; width:100%; max-width:420px; font-family:var(--mono); font-size:11px; color:var(--text3); }
+.bal-bar { flex:1; height:14px; border-radius:8px; background:var(--bg4); position:relative; overflow:hidden; }
+.bal-fill-l, .bal-fill-r { position:absolute; top:0; bottom:0; background:var(--blue); opacity:.5; }
+.bal-fill-l { left:0; } .bal-fill-r { right:0; background:var(--amber); }
+
+details summary { cursor:pointer; font-size:12px; color:var(--text2); }
+.set-row { display:flex; align-items:center; gap:10px; margin-top:10px; font-size:12px; color:var(--text2); }
+.set-row input[type=range] { flex:1; }
+.set-row .val { font-family:var(--mono); min-width:54px; text-align:right; color:var(--text); }
+.hint { font-size:12px; color:var(--text3); line-height:1.5; }
+a.back { color:var(--blue); font-size:12px; text-decoration:none; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><b>Ferra</b> <span>Single-Leg Stand</span></div>
+  <div class="spacer"></div>
+  <span class="pill"><span class="dot" id="conn-dot"></span><span id="conn-text">disconnected</span></span>
+  <button id="btn-connect" class="btn-green">Connect</button>
+</div>
+
+<div class="card">
+  <div class="card-title">Level</div>
+  <div class="levels">
+    <div class="level-card sel" data-level="1">
+      <div class="lc-name">1 · Endurance</div>
+      <div class="lc-desc">Hold each leg for the target time, one at a time.</div>
+    </div>
+    <div class="level-card" data-level="2">
+      <div class="lc-name">2 · Agility</div>
+      <div class="lc-desc">Switch legs on the cue and hold briefly. Measures how fast you transfer.</div>
+    </div>
+  </div>
+</div>
+
+<div class="card arena-card">
+  <div class="instr" id="instr">Connect the plate to begin</div>
+  <div class="timer" id="timer">0.0<span class="u">s</span></div>
+  <canvas id="arena" width="460" height="380"></canvas>
+  <div class="sub" id="sub">Stand with one foot on each side of the centre line, feet about shoulder-width apart.</div>
+  <div class="bal-wrap">
+    <span>L</span>
+    <div class="bal-bar"><div class="bal-fill-l" id="bal-l"></div><div class="bal-fill-r" id="bal-r"></div></div>
+    <span>R</span>
+  </div>
+  <div style="display:flex; gap:10px; margin-top:8px;">
+    <button id="btn-start" class="btn-hero" disabled>Start</button>
+    <button id="btn-stop" class="btn-red" style="display:none;">Stop</button>
+  </div>
+</div>
+
+<div class="card" id="results-card" style="display:none;">
+  <div class="card-title" id="results-title">Results</div>
+  <div class="results" id="results"></div>
+</div>
+
+<div class="card">
+  <details id="settings">
+    <summary>Settings &amp; live values</summary>
+    <div class="set-row">
+      <label>Hold target (Level 1)</label>
+      <input type="range" id="set-target" min="5" max="60" step="5" value="30">
+      <span class="val" id="set-target-val">30 s</span>
+    </div>
+    <div class="set-row">
+      <label>Stand sensitivity</label>
+      <input type="range" id="set-thresh" min="55" max="85" step="1" value="66">
+      <span class="val" id="set-thresh-val">66 %</span>
+    </div>
+    <div class="set-row hint" id="live-readout">Live: not connected.</div>
+    <div class="set-row hint">Sensitivity = how far your weight must shift onto one leg to count as standing on it.
+      Lower it if the game won't register your single-leg stance; raise it if two-footed leaning triggers it.</div>
+  </details>
+</div>
+
+<div class="card hint">
+  <a class="back" href="./index.html">← Back to the balance game</a><br><br>
+  This game reads the plate's left-vs-right load split. Standing on both feet ≈ 50/50; lift a leg and your
+  weight pins to the standing side. The clock runs while it stays there and stops the instant your other foot
+  touches down. Calibrate the plate first (in the main game's Advanced → Calibration) so the loads read true.
+</div>
+
+<script>
+// ── BLE contract (identical to the main dashboard / firmware) ──────────────
+const SVC_UUID    = "7e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const ANGLES_UUID = "7e400002-b5a3-f393-e0a9-e50e24dcca9e";
+const CMD_UUID    = "7e400003-b5a3-f393-e0a9-e50e24dcca9e";
+
+const $ = id => document.getElementById(id);
+const clamp = (v,lo,hi) => Math.min(hi,Math.max(lo,v));
+const now = () => performance.now();
+
+// ── Live plate state, updated every BLE frame ──────────────────────────────
+const live = { weight:0, fl:0, fr:0, bl:0, br:0, rightFrac:0.5, copX:0, copY:0, lastMs:0 };
+let lastFrameAt = 0;
+
+let device=null, anglesChar=null, cmdChar=null, connected=false;
+
+function setConnected(yes) {
+  connected = yes;
+  $('conn-dot').className = yes ? 'dot on' : 'dot';
+  $('conn-text').textContent = yes ? 'connected' : 'disconnected';
+  $('btn-start').disabled = !yes || engine.running;
+  if (!yes) { $('instr').textContent = 'Connect the plate to begin'; }
+}
+
+async function connect() {
+  if (!navigator.bluetooth) { $('instr').textContent = 'Open in Chrome or Edge'; return; }
+  try {
+    $('instr').textContent = 'Requesting device…';
+    device = await navigator.bluetooth.requestDevice({
+      filters:[{ services:[SVC_UUID] }], optionalServices:[SVC_UUID],
+    });
+    device.addEventListener('gattserverdisconnected', () => setConnected(false));
+    const server = await device.gatt.connect();
+    const svc = await server.getPrimaryService(SVC_UUID);
+    anglesChar = await svc.getCharacteristic(ANGLES_UUID);
+    cmdChar = await svc.getCharacteristic(CMD_UUID);
+    await anglesChar.startNotifications();
+    anglesChar.addEventListener('characteristicvaluechanged', onFrame);
+    setConnected(true);
+    $('instr').textContent = 'Ready — press Start';
+  } catch (e) {
+    setConnected(false);
+    $('instr').textContent = 'Connect failed: ' + e.message;
+  }
+}
+$('btn-connect').addEventListener('click', connect);
+
+function onFrame(evt) {
+  const dv = evt.target.value;
+  if (dv.byteLength < 16) return;
+  live.lastMs = dv.getUint32(0, true);
+  live.copX = dv.getFloat32(4, true);
+  live.copY = dv.getFloat32(8, true);
+  live.weight = dv.getFloat32(12, true);
+  if (dv.byteLength >= 32) {
+    live.fl = dv.getFloat32(16, true); live.fr = dv.getFloat32(20, true);
+    live.bl = dv.getFloat32(24, true); live.br = dv.getFloat32(28, true);
+  }
+  const leftKg  = live.fl + live.bl;
+  const rightKg = live.fr + live.br;
+  const sum = leftKg + rightKg;
+  // Fall back to CoP-X if a cell-less (16-byte) frame ever arrives.
+  live.rightFrac = sum > 1 ? rightKg / sum : clamp(0.5 + live.copX / 34, 0, 1);
+  lastFrameAt = now();
+  tickEngine();
+}
+
+// ── Settings ───────────────────────────────────────────────────────────────
+let HOLD_TARGET = 30;       // s, Level 1
+let THRESH_ON   = 0.66;     // fraction onto the standing leg to count as "on it"
+const THRESH_HYST = 0.06;   // must fall this far back to count as "foot down"
+const SWITCH_HOLD = 5;      // s, Level 2 hold per rep
+const SWITCH_REPS = 6;      // Level 2 total reps (alternating)
+const MIN_STAND_KG = 18;    // below this total → treated as stepped off
+const FOOTDOWN_DEBOUNCE = 180; // ms the load must stay returned to count as a real foot-down
+
+$('set-target').addEventListener('input', e => {
+  HOLD_TARGET = +e.target.value; $('set-target-val').textContent = HOLD_TARGET + ' s';
+});
+$('set-thresh').addEventListener('input', e => {
+  THRESH_ON = +e.target.value / 100; $('set-thresh-val').textContent = e.target.value + ' %';
+});
+
+let level = 1;
+document.querySelectorAll('.level-card').forEach(c => c.addEventListener('click', () => {
+  if (engine.running) return;
+  document.querySelectorAll('.level-card').forEach(x => x.classList.remove('sel'));
+  c.classList.add('sel'); level = +c.dataset.level;
+}));
+
+// ── Audio cues (tiny, dependency-free) ──────────────────────────────────────
+let actx = null;
+function beep(freq, ms, type='sine', gain=0.05) {
+  try {
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.value = freq; o.connect(g); g.connect(actx.destination);
+    g.gain.value = gain; o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + ms/1000);
+    o.stop(actx.currentTime + ms/1000);
+  } catch {}
+}
+const cueGo=()=>beep(660,140,'triangle',0.06), cueWin=()=>{beep(880,120);setTimeout(()=>beep(1320,180),120);},
+      cueFail=()=>beep(200,260,'sawtooth',0.05), cueTick=()=>beep(520,40,'sine',0.03);
+
+// ── Game engine ──────────────────────────────────────────────────────────────
+const engine = {
+  running:false, phase:'idle', rounds:[], idx:0,
+  bodyWeight:0, calStart:0,
+  holdStart:0, awaitStart:0, footDownSince:0, lastWholeSec:-1,
+  pathLen:0, prevX:0, prevY:0,
+  results:[],
+};
+
+function legName(l){ return l==='R' ? 'RIGHT' : 'LEFT'; }
+function liftName(l){ return l==='R' ? 'LEFT' : 'RIGHT'; }   // which leg to raise to stand on l
+function onLeg(l){ return l==='R' ? live.rightFrac >= THRESH_ON : (1-live.rightFrac) >= THRESH_ON; }
+function offLeg(l){ const f = l==='R'?live.rightFrac:(1-live.rightFrac); return f < (THRESH_ON - THRESH_HYST); }
+function onPlate(){ return live.weight >= MIN_STAND_KG; }
+
+function buildRounds() {
+  if (level === 1) return [{leg:'R',target:HOLD_TARGET},{leg:'L',target:HOLD_TARGET}];
+  const r=[]; let leg='R';
+  for (let i=0;i<SWITCH_REPS;i++){ r.push({leg, target:SWITCH_HOLD, switch:true}); leg = leg==='R'?'L':'R'; }
+  return r;
+}
+
+function startGame() {
+  if (!connected) return;
+  beep(440,60);
+  engine.running = true; engine.results = []; engine.idx = 0;
+  engine.rounds = buildRounds();
+  engine.phase = 'calibrate'; engine.calStart = 0;
+  $('btn-start').style.display='none'; $('btn-stop').style.display='';
+  $('results-card').style.display='none';
+  $('instr').textContent = 'Stand on BOTH feet, centred';
+  $('sub').textContent = 'One foot each side of the line — hold still…';
+}
+function stopGame(finished) {
+  engine.running = false; engine.phase = finished ? 'done' : 'idle';
+  $('btn-start').style.display=''; $('btn-stop').style.display='none';
+  $('btn-start').disabled = !connected;
+  if (!finished) { $('instr').textContent = 'Stopped'; $('sub').textContent=''; $('timer').innerHTML='0.0<span class="u">s</span>'; }
+}
+$('btn-start').addEventListener('click', startGame);
+$('btn-stop').addEventListener('click', () => stopGame(false));
+
+function setTimer(sec){ $('timer').innerHTML = sec.toFixed(1) + '<span class="u">s</span>'; }
+
+function tickEngine() {
+  // Always refresh the live read-out for tuning.
+  $('live-readout').textContent =
+    `Live: weight ${live.weight.toFixed(1)} kg · right ${(live.rightFrac*100).toFixed(0)}% / left ${((1-live.rightFrac)*100).toFixed(0)}%`;
+
+  if (!engine.running) { return; }
+  const t = now();
+
+  switch (engine.phase) {
+
+    case 'calibrate': {
+      const centred = onPlate() && live.rightFrac > 0.40 && live.rightFrac < 0.60;
+      if (centred) {
+        if (!engine.calStart) engine.calStart = t;
+        const held = t - engine.calStart;
+        setTimer(clamp(1.5 - held/1000, 0, 1.5));
+        if (held > 1500) {
+          engine.bodyWeight = live.weight;
+          beginRound();
+        }
+      } else { engine.calStart = 0; setTimer(0); }
+      break;
+    }
+
+    case 'await': {  // waiting for the player to get onto the target leg
+      const r = engine.rounds[engine.idx];
+      setTimer(0);
+      if (onLeg(r.leg)) {
+        const transition = r.switch ? (t - engine.awaitStart) : 0;
+        engine.phase = 'hold';
+        engine.holdStart = t; engine.footDownSince = 0; engine.lastWholeSec = -1;
+        engine.pathLen = 0; engine.prevX = live.copX; engine.prevY = live.copY;
+        engine._transition = transition;
+        cueGo();
+        $('sub').textContent = 'Hold it!';
+      }
+      break;
+    }
+
+    case 'hold': {
+      const r = engine.rounds[engine.idx];
+      const elapsed = (t - engine.holdStart) / 1000;
+      setTimer(elapsed);
+      // sway path (quality metric)
+      engine.pathLen += Math.hypot(live.copX - engine.prevX, live.copY - engine.prevY);
+      engine.prevX = live.copX; engine.prevY = live.copY;
+      // per-second tick cue
+      const ws = Math.floor(elapsed);
+      if (ws !== engine.lastWholeSec && ws > 0 && ws < r.target) { engine.lastWholeSec = ws; cueTick(); }
+
+      const fellOff = !onPlate();
+      const footDown = offLeg(r.leg);
+      if (footDown || fellOff) {
+        if (!engine.footDownSince) engine.footDownSince = t;
+        if (t - engine.footDownSince > FOOTDOWN_DEBOUNCE) {
+          finishRound(false, elapsed);
+        }
+      } else {
+        engine.footDownSince = 0;
+      }
+      if (elapsed >= r.target) finishRound(true, r.target);
+      break;
+    }
+
+    case 'result': {
+      if (t - engine._resultAt > engine._resultDur) {
+        engine.idx++;
+        if (engine.idx >= engine.rounds.length) finishGame();
+        else beginRound();
+      }
+      break;
+    }
+  }
+}
+
+function beginRound() {
+  const r = engine.rounds[engine.idx];
+  engine.phase = 'await'; engine.awaitStart = now();
+  const ord = engine.rounds.length > 2 ? ` (${engine.idx+1}/${engine.rounds.length})` : '';
+  $('instr').innerHTML = `Raise your <b style="color:var(--amber)">${liftName(r.leg)}</b> leg`;
+  $('sub').textContent = `Balance on your ${legName(r.leg)} leg · target ${r.target}s`;
+  beep(r.leg==='R'?700:520, 90);
+}
+
+function finishRound(success, timeSec) {
+  const r = engine.rounds[engine.idx];
+  engine.results.push({
+    leg:r.leg, target:r.target, time:timeSec, success,
+    transition: engine._transition||0, pathLen:engine.pathLen,
+  });
+  success ? cueWin() : cueFail();
+  $('instr').innerHTML = success
+    ? `<span style="color:var(--green)">${legName(r.leg)} ✓ ${timeSec.toFixed(1)}s</span>`
+    : `<span style="color:var(--red)">Foot down — ${timeSec.toFixed(1)}s</span>`;
+  $('sub').textContent = success ? 'Nice hold!' : `Held ${timeSec.toFixed(1)}s of ${r.target}s`;
+  engine.phase = 'result'; engine._resultAt = now(); engine._resultDur = 2200;
+}
+
+function finishGame() {
+  stopGame(true);
+  $('instr').textContent = 'Done!';
+  $('sub').textContent = level===1 ? 'Endurance complete' : 'Agility complete';
+  setTimer(0);
+  renderResults();
+}
+
+function renderResults() {
+  const card = $('results-card'), box = $('results');
+  card.style.display = ''; box.innerHTML = '';
+  $('results-title').textContent = level===1 ? 'Endurance results' : 'Agility results';
+
+  if (level === 1) {
+    const R = engine.results.find(r=>r.leg==='R'), L = engine.results.find(r=>r.leg==='L');
+    const item = (label,val) => `<div class="res-item"><div class="rl">${label}</div><div class="rv">${val}</div></div>`;
+    const fmt = r => r ? (r.success?'✓ ':'') + r.time.toFixed(1)+'s' : '–';
+    const rt = R?R.time:0, lt = L?L.time:0;
+    const asym = (rt+lt) > 0 ? Math.abs(rt-lt)/Math.max(rt,lt)*100 : 0;
+    box.innerHTML =
+      item('Right leg', fmt(R)) + item('Left leg', fmt(L)) + item('Asymmetry', asym.toFixed(0)+'%');
+    saveBest('L1', Math.min(rt,lt));
+  } else {
+    const holds = engine.results.filter(r=>r.success).length;
+    const trans = engine.results.filter(r=>r.success && r.transition>0).map(r=>r.transition);
+    const avgT = trans.length ? (trans.reduce((a,b)=>a+b,0)/trans.length/1000) : 0;
+    const fastT = trans.length ? Math.min(...trans)/1000 : 0;
+    const item = (label,val) => `<div class="res-item"><div class="rl">${label}</div><div class="rv">${val}</div></div>`;
+    box.innerHTML =
+      item('Holds', holds+'/'+engine.results.length) +
+      item('Avg switch', avgT?avgT.toFixed(2)+'s':'–') +
+      item('Fastest', fastT?fastT.toFixed(2)+'s':'–');
+    saveBest('L2', holds);
+  }
+}
+
+function saveBest(key, val) {
+  try {
+    const k = 'ferraSL_'+key, prev = +localStorage.getItem(k) || 0;
+    const better = key==='L1' ? val>prev : val>prev;
+    if (better) localStorage.setItem(k, val);
+  } catch {}
+}
+
+// ── Arena render loop ────────────────────────────────────────────────────────
+const cv = $('arena'), cx = cv.getContext('2d');
+function draw() {
+  requestAnimationFrame(draw);
+  const W = cv.width, H = cv.height;
+  cx.clearRect(0,0,W,H);
+
+  // plate
+  const pad=24, px=pad, py=pad, pw=W-2*pad, ph=H-2*pad;
+  cx.fillStyle = 'rgba(255,255,255,.03)';
+  roundRect(px,py,pw,ph,16); cx.fill();
+  cx.strokeStyle = 'var(--border)'; cx.strokeStyle='rgba(255,255,255,.10)'; cx.lineWidth=1; cx.stroke();
+
+  // centre line
+  cx.setLineDash([6,7]); cx.strokeStyle='rgba(255,255,255,.18)'; cx.lineWidth=1.5;
+  cx.beginPath(); cx.moveTo(W/2,py+8); cx.lineTo(W/2,py+ph-8); cx.stroke(); cx.setLineDash([]);
+
+  // which leg is the current target (if mid-round)
+  const r = engine.running && (engine.phase==='await'||engine.phase==='hold') ? engine.rounds[engine.idx] : null;
+  const holding = engine.phase==='hold';
+
+  // threshold zones: region beyond THRESH_ON on each side
+  const fracToX = f => px + clamp(f,0,1)*pw;       // rightFrac → x
+  const rOnX = fracToX(THRESH_ON);                 // right zone starts here
+  const lOnX = fracToX(1-THRESH_ON);               // left zone ends here
+  drawZone(px, py, lOnX-px, ph, 'L', r);           // left foot zone
+  drawZone(rOnX, py, px+pw-rOnX, ph, 'R', r);      // right foot zone
+
+  // progress ring on the active zone while holding
+  if (holding && r) {
+    const elapsed = (now()-engine.holdStart)/1000;
+    const frac = clamp(elapsed/r.target,0,1);
+    const zx = r.leg==='R' ? (rOnX+px+pw)/2 : (px+lOnX)/2;
+    const zy = py+ph/2;
+    cx.beginPath(); cx.arc(zx,zy,46,-Math.PI/2,-Math.PI/2+frac*2*Math.PI);
+    cx.strokeStyle = '#4ade80'; cx.lineWidth=6; cx.lineCap='round'; cx.stroke();
+  }
+
+  // CoP / balance dot — X driven by rightFrac (the thresholded signal), Y by copY
+  const dotX = fracToX(live.rightFrac);
+  const dotY = clamp(H/2 - (live.copY/17)*(ph/2), py+14, py+ph-14);
+  let col = '#60a5fa';
+  if (r) col = onLeg(r.leg) ? '#4ade80' : (engine.phase==='await' ? '#fbbf24' : '#f87171');
+  cx.beginPath(); cx.arc(dotX,dotY,13,0,2*Math.PI);
+  cx.fillStyle = col; cx.shadowColor=col; cx.shadowBlur=18; cx.fill(); cx.shadowBlur=0;
+
+  // balance bar mirror
+  $('bal-l').style.width = ((1-live.rightFrac)*50).toFixed(1)+'%';
+  $('bal-r').style.width = (live.rightFrac*50).toFixed(1)+'%';
+}
+function drawZone(x,y,w,h,side,r) {
+  const active = r && r.leg===side;
+  cx.fillStyle = active ? 'rgba(74,222,128,.10)' : 'rgba(255,255,255,.02)';
+  roundRect(x+6,y+30,w-12,h-60,14); cx.fill();
+  cx.fillStyle = active ? 'rgba(74,222,128,.65)' : 'rgba(255,255,255,.18)';
+  cx.font = '600 13px Outfit, sans-serif'; cx.textAlign='center';
+  cx.fillText(side==='R'?'RIGHT':'LEFT', x+w/2, y+24);
+}
+function roundRect(x,y,w,h,rad){ cx.beginPath(); cx.moveTo(x+rad,y);
+  cx.arcTo(x+w,y,x+w,y+h,rad); cx.arcTo(x+w,y+h,x,y+h,rad);
+  cx.arcTo(x,y+h,x,y,rad); cx.arcTo(x,y,x+w,y,rad); cx.closePath(); }
+draw();
+
+// Watchdog: warn if connected but no frames (plate not calibrated / not streaming).
+setInterval(() => {
+  if (connected && lastFrameAt && now()-lastFrameAt > 2500 && !engine.running) {
+    $('sub').textContent = 'No data from plate — is it calibrated and streaming?';
+  }
+}, 1500);
+</script>
+</body>
+</html>
